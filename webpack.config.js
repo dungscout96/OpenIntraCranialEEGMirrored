@@ -28,6 +28,7 @@ var config = {
     './modules/dicom_archive/js/dicom_archive.js': './modules/dicom_archive/jsx/dicom_archive.js',
     './modules/genomic_browser/js/FileUploadModal.js': './modules/genomic_browser/jsx/FileUploadModal.js',
     './modules/genomic_browser/js/profileColumnFormatter.js': './modules/genomic_browser/jsx/profileColumnFormatter.js',
+    './modules/eegbrowser/js/EEGBrowser.js': './modules/eegbrowser/jsx/EEGBrowser.js',
     './modules/imaging_browser/js/ImagePanel.js': './modules/imaging_browser/jsx/ImagePanel.js',
     './modules/imaging_browser/js/columnFormatter.js': './modules/imaging_browser/jsx/columnFormatter.js',
     './modules/imaging_browser/js/onSort.js': './modules/imaging_browser/jsx/onSort.js',
