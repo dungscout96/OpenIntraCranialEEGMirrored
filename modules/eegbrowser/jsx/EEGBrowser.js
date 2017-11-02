@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import MRILoader from './MRILoader';
 
 const NUM_REGIONS = 8;
 const POINTS_PER_REGION = 5;
@@ -62,8 +63,10 @@ class RegionSelect extends Component {
     const regionElement = (region, selected, onclick) => (
       <li
         key={region.name}
-        className={selected ? 'selected-region' : 'unselected-region'}
+        className={`region-item ${selected ? 'selected-region' : 'unselected-region'}`}
         onClick={() => onclick(region)}
+        onMouseEnter={() => { this.props.hoverRegion(region); }}
+        onMouseLeave={() => { this.props.hoverRegion(region); }}
       >
         {region.label + (selected ? '*' : '')}
       </li>
@@ -84,49 +87,69 @@ class RegionSelect extends Component {
   }
 }
 
+const YELLOW = 0xFF6628;
+const GREEN = 0x34A853;
+const BLUE = 0x4285F4;
 class MRIView extends Component {
   componentDidMount() {
     const { width, height } = this.canvas.getBoundingClientRect();
     const renderer = new THREE.WebGLRenderer({ canvas: this.canvas });
     renderer.setSize(width, height);
     this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
-    this.camera.position.z = 3;
-    this.camera.lookAt(new THREE.Vector3(0, 0, 0));
     this.controls = new THREE.OrbitControls(this.camera, this.canvas);
     this.scene = new THREE.Scene();
-    this.attachPoints();
-    const self = this;
-    function run() {
-      renderer.render(self.scene, self.camera);
-      window.requestAnimationFrame(run.bind(self));
-    }
-    run();
+    this.mriLoader = new MRILoader(this.scene);
+    this.mriLoader.initialize().then((dimensions) => {
+      const scale = dimensions.scale / 2;
+      this.camera.position.z = -dimensions.diagonal / 1.5;
+      this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+      this.meshes = [];
+      const material = new THREE.MeshBasicMaterial({ color: YELLOW });
+      const geometry = new THREE.SphereBufferGeometry(dimensions.scale / (NUM_REGIONS * 10) , 8, 8);
+      this.props.regions.forEach((region, i) => {
+        region.points.forEach((point) => {
+          const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+          mesh.material.copy(material)
+          mesh.position.fromArray(point.position);
+          mesh.position.multiplyScalar(scale);
+          this.scene.add(mesh);
+          if (!this.meshes[i]) {
+            this.meshes[i] = [];
+          }
+          this.meshes[i].push(mesh);
+        });
+      });
+      const self = this;
+      function run() {
+        renderer.render(self.scene, self.camera);
+        window.requestAnimationFrame(run.bind(self));
+      }
+      run();
+    });
   }
   componentDidUpdate() {
-    this.attachPoints();
-  }
-  attachPoints() {
-    while(this.scene.children.length > 0) {
-      this.scene.remove(this.scene.children[0]);
-    }
-    const material = new THREE.MeshBasicMaterial({ color: 0x34A853 });
-    const geometry = new THREE.SphereBufferGeometry(1 / (NUM_REGIONS * 10) , 8, 8);
-    this.props.regions.forEach((region) => {
+    this.props.regions.forEach((region, i) => {
       region.points.forEach((point) => {
-        const mesh = new THREE.Mesh(geometry, material);
-        this.scene.add(mesh);
-        mesh.position.fromArray(point.position);
+        this.meshes[i].forEach(m => { m.material.color.setHex(YELLOW); });
+        if (this.props.selected.find(r => r === region)) {
+          this.meshes[i].forEach(m => { m.material.color.setHex(GREEN); });
+        }
+        if (this.props.hoveredRegion === region) {
+          this.meshes[i].forEach(m => { m.material.color.setHex(BLUE); });
+        }
       });
     });
   }
   render() {
     return (
-      <canvas
-        className="mri-view"
-        width="450"
-        height="400"
-        ref={(canvas) => { this.canvas = canvas; }}
-      />
+      <div className="mri-view-container">
+        <canvas
+          className="mri-view"
+          width="450"
+          height="400"
+          ref={(canvas) => { this.canvas = canvas; }}
+        />
+      </div>
     )
   }
 }
@@ -144,7 +167,7 @@ class SignalPlots extends Component {
     d3.select(this.container)
       .selectAll('svg')
       .remove();
-    this.props.regions.forEach((region) => {
+    this.props.selected.forEach((region) => {
       region.points.forEach((point) => {
         const { tmin, tmax } = point;
         const idx = point.domain.map((_, i) => i);
@@ -158,6 +181,8 @@ class SignalPlots extends Component {
                        .x(i => x(point.domain[i]))
                        .y(i => y(point.signal[i]));
         const g = d3.select(this.container)
+                    .append('div')
+                      .attr('class', 'signal-plot-item')
                     .append('svg')
                       .attr('width', WIDTH)
                       .attr('height', HEIGHT)
@@ -230,10 +255,20 @@ export default class EEGBrowser extends Component {
           selected={this.state.selected}
           unselectRegion={unselectRegion}
           selectRegion={selectRegion}
+          hoverRegion={(region) => { this.setState({ hoveredRegion: region }); }}
+          onMouseLeave={() => { this.setState({ hoveredRegion: null }); }}
         >
         </RegionSelect>
-        <MRIView regions={this.state.selected}></MRIView>
-        <SignalPlots regions={this.state.selected}></SignalPlots>
+        <MRIView
+          regions={this.state.regions}
+          selected={this.state.selected}
+          hoveredRegion={this.state.hoveredRegion}
+        >
+        </MRIView>
+        <SignalPlots
+          selected={this.state.selected}
+        >
+        </SignalPlots>
       </div>
     );
   }

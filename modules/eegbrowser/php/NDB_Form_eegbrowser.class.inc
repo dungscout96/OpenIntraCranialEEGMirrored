@@ -53,8 +53,26 @@ class NDB_Form_eegbrowser extends \NDB_Form
              $baseURL . "/js/d3.min.js",
              $baseURL . "/eegbrowser/js/three.min.js",
              $baseURL . "/eegbrowser/js/OrbitControls.js",
+             $baseURL . "/eegbrowser/js/pixpipe.min.js",
              $baseURL . "/eegbrowser/js/EEGBrowser.js",
             )
+        );
+    }
+    /**
+     * Override css fetching for eegbrowser css styles
+     *
+     * @return array of css files to be loaded into the eegbrowser page.
+     */
+    function getCSSDependencies()
+    {
+        $factory =& \NDB_Factory::singleton();
+        $baseURL = $factory->settings()->getBaseURL();
+        $deps    = parent::getCSSDependencies();
+        return array_merge(
+            $deps,
+            [
+             $baseURL . "/eegbrowser/css/eegbrowser.css",
+            ]
         );
     }
 }

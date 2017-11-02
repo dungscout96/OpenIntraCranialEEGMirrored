@@ -1,0 +1,24 @@
+.eeg-browser {
+  display: flex;
+  flex-direction: row;
+}
+.region-select {
+  flex: 1;
+}
+
+.region-item {
+  cursor: pointer;
+  margin: 10px 10px;
+}
+
+.mri-view-container {
+  flex: 1;
+}
+
+.signal-plots {
+  display: flex;
+  flex: 2;
+  height: 800px;
+  flex-direction: column;
+  overflow-y: scroll;
+}
