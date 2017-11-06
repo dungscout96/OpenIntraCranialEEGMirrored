@@ -2,8 +2,8 @@ import React, { Component } from 'react';
 import MRILoader from './MRILoader';
 
 const NUM_REGIONS = 8;
-const POINTS_PER_REGION = 5;
-const SAMPLES_PER_POINT = 200;
+const POINTS_PER_REGION = 30;
+const SAMPLES_PER_POINT = 500;
 
 class Region {
   constructor(name, label, center) {
@@ -92,20 +92,25 @@ const GREEN = 0x34A853;
 const BLUE = 0x4285F4;
 class MRIView extends Component {
   componentDidMount() {
-    const { width, height } = this.canvas.getBoundingClientRect();
-    const renderer = new THREE.WebGLRenderer({ canvas: this.canvas });
+    const width = 500;
+    const height = 400;
+    const renderer = new THREE.WebGLRenderer();
+    this.canvas = renderer.domElement;
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.addCanvas()
     renderer.setSize(width, height);
     this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
     this.controls = new THREE.OrbitControls(this.camera, this.canvas);
     this.scene = new THREE.Scene();
     this.mriLoader = new MRILoader(this.scene);
+    this.meshes = [];
     this.mriLoader.initialize().then((dimensions) => {
       const scale = dimensions.scale / 2;
-      this.camera.position.z = -dimensions.diagonal / 1.5;
+      this.camera.position.z = -dimensions.diagonal / 1.7;
       this.camera.lookAt(new THREE.Vector3(0, 0, 0));
-      this.meshes = [];
       const material = new THREE.MeshBasicMaterial({ color: YELLOW });
-      const geometry = new THREE.SphereBufferGeometry(dimensions.scale / (NUM_REGIONS * 10) , 8, 8);
+      const geometry = new THREE.SphereBufferGeometry(scale / (NUM_REGIONS * 10) , 8, 8);
       this.props.regions.forEach((region, i) => {
         region.points.forEach((point) => {
           const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
@@ -128,99 +133,284 @@ class MRIView extends Component {
     });
   }
   componentDidUpdate() {
+    this.addCanvas();
     this.props.regions.forEach((region, i) => {
       region.points.forEach((point) => {
-        this.meshes[i].forEach(m => { m.material.color.setHex(YELLOW); });
-        if (this.props.selected.find(r => r === region)) {
-          this.meshes[i].forEach(m => { m.material.color.setHex(GREEN); });
-        }
-        if (this.props.hoveredRegion === region) {
-          this.meshes[i].forEach(m => { m.material.color.setHex(BLUE); });
+        if (this.meshes[i]) {
+          this.meshes[i].forEach(m => { m.material.color.setHex(YELLOW); });
+          if (this.props.selected.find(r => r === region)) {
+            this.meshes[i].forEach(m => { m.material.color.setHex(GREEN); });
+          }
+          if (this.props.hoveredRegion === region) {
+            this.meshes[i].forEach(m => { m.material.color.setHex(BLUE); });
+          }
         }
       });
     });
   }
+  addCanvas() {
+    if (this.container && this.lastContainer !== this.container) {
+      this.container.appendChild(this.canvas);
+      this.lastContainer = this.container;
+    }
+  }
   render() {
-    return (
-      <div className="mri-view-container">
-        <canvas
-          className="mri-view"
-          width="450"
-          height="400"
-          ref={(canvas) => { this.canvas = canvas; }}
-        />
-      </div>
-    )
+    if (this.props.showMRI) {
+      return (
+        <div
+          className="mri-view-container"
+          ref={(div) => { this.container = div; }}
+        >
+        </div>
+      );
+    }
+    return null;
   }
 }
 
+const ZOOM_AMOUNT = 1;
+const INTERVAL_MOVE_AMOUNT = 1;
+const PLOTS_PER_PAGE = 7;
+
+const countNumPoints = regions => regions.map(r => r.points.length).reduce((a,b) => a + b, 0);
+
 class SignalPlots extends Component {
+  constructor(props) {
+    super(props);
+    this.lastMouseX = null;
+    this.drawn = [];
+    this.state = {
+      bounds: { tmin: -0.1, tmax: 25 },
+      page: 0
+    };
+  }
+  componentWillReceiveProps(nextProps) {
+    const maxPage = Math.floor(countNumPoints(nextProps.selected) / PLOTS_PER_PAGE);
+    const newPage = this.state.page > maxPage ? maxPage : this.state.page;
+    this.setState({ page : newPage });
+  }
   componentDidMount() {
+    // If user mouses up anywhere in the browser window stop translating time interval.
+    window.addEventListener('mouseup', () => { this.lastMouseX = null; });
+    window.addEventListener('resize', () => { this.forceUpdate(); });
     this.renderPlots();
   }
   componentDidUpdate() {
     this.renderPlots();
   }
   renderPlots() {
-    const WIDTH = 400;
-    const HEIGHT = 200;
-    d3.select(this.container)
-      .selectAll('svg')
-      .remove();
+    this.width = this.container.getBoundingClientRect().width - 20;
+    const HEIGHT = 100;
+    const { tmin, tmax } = this.state.bounds;
+    if (this.xAxisTop) {
+      this.xAxisTop.remove();
+      this.xAxisTop = undefined;
+    }
+    if (this.xAxisBottom) {
+      this.xAxisBottom.remove();
+      this.xAxisBottom = undefined;
+    }
+    const x = d3.scale.linear()
+                .domain([tmin, tmax])
+                .rangeRound([0, this.width]);
+    const y = d3.scale.linear()
+                .domain([-1.7, 1.7])
+                .rangeRound([HEIGHT, 0]);
+    const yAxis = d3.svg.axis()
+                    .scale(y)
+                    .ticks(0)
+                    .tickValues([-1, 0, 1])
+                    .outerTickSize(0)
+                    .orient('left');
+    const drawSignalLine = (g, point, indexes) => {
+      const signalLine = d3.svg.line()
+                           .x(i => x(point.domain[i] || 0))
+                           .y(i => y(point.signal[i] || 0));
+      return g.append('path')
+              .attr('fill', 'none')
+              .attr('stroke', 'steelblue')
+              .attr('stroke-linejoin', 'round')
+              .attr('stroke-linecap', 'round')
+              .attr('stroke-width', 1.5)
+              .attr('d', signalLine(indexes));
+    };
+    const drawSecondTicks = (g, yAxis, tmin, tmax) => {
+      const ctmin = Math.ceil(tmin);
+      const ctmax = Math.ceil(tmax);
+      const secondTicks = g.append('g');
+      const { height } = yAxis.node().getBoundingClientRect();
+      for (let t = ctmin; t < ctmax; t++) {
+        secondTicks.append('line')
+                   .attr({x1: x(t), y1: 0})
+                   .attr({x2: x(t), y2: height})
+                   .attr('stroke-width', 1)
+                   .attr('stroke', '#999');
+      }
+      return secondTicks;
+    };
+    const drawZeroLine = (g, tmin, tmax) => {
+      return g.append('line')
+              .attr({ x1: x(tmin), y1: y(0)})
+              .attr({ x2: x(tmax), y2: y(0)})
+              .attr('stroke-width', 1)
+              .attr('stroke', '#555');
+    };
+    this.drawn.forEach(drawn => { drawn.tagged = false; });
+    if (this.drawn.length > 0) {
+      this.drawn[this.drawn.length - 1].svg.attr('class', 'signal-plot-item');
+    }
+    let numPoints = -1;
     this.props.selected.forEach((region) => {
       region.points.forEach((point) => {
-        const { tmin, tmax } = point;
-        const idx = point.domain.map((_, i) => i);
-        const x = d3.scale.linear()
-                    .domain([tmin, tmax])
-                    .rangeRound([0, WIDTH]);
-        const y = d3.scale.linear()
-                    .domain([-2.0, 2.0])
-                    .rangeRound([HEIGHT / 1.6, 0]);
-        const line = d3.svg.line()
-                       .x(i => x(point.domain[i]))
-                       .y(i => y(point.signal[i]));
-        const g = d3.select(this.container)
-                    .append('div')
+        numPoints++;
+        if (numPoints < (PLOTS_PER_PAGE - 1) * this.state.page ||
+            numPoints > (PLOTS_PER_PAGE - 1) * (this.state.page + 1)
+        ) {
+          return;
+        }
+        // Only filter out array indices where time values in the domain are in bounds.
+        const indexFilter = (indexes, t, i) => {
+          if (t >= tmin && t <= tmax) {
+            indexes.push(i)
+          }
+          return indexes;
+        }
+        const indexes = point.domain.reduce(indexFilter, []);
+        const drawn = this.drawn.find(d => d.point === point)
+        if (drawn) {
+          const { g, sigLine, secondTicks, zeroLine, yAx } = drawn;
+          sigLine.remove();
+          secondTicks.remove();
+          zeroLine.remove();
+          yAx.call(yAxis);
+          drawn.sigLine = drawSignalLine(g, point, indexes);
+          drawn.secondTicks = drawSecondTicks(g, yAx, tmin, tmax);
+          drawn.zeroLine = drawZeroLine(g, tmin, tmax);
+          drawn.tagged = true;
+          return;
+        }
+        const svg = d3.select(this.container)
+                      .append('svg')
                       .attr('class', 'signal-plot-item')
-                    .append('svg')
-                      .attr('width', WIDTH)
-                      .attr('height', HEIGHT)
-                      .append('g')
-                      .attr('transform', `translate(${60}, ${10})`);
-        const xAxis = d3.svg.axis()
-                        .scale(x)
-                        .ticks(20)
-                        .orient('bottom');
-        const yAxis = d3.svg.axis()
-                        .scale(y)
-                        .ticks(5)
-                        .orient('left');
-        g.append('g')
-         .call(xAxis)
-         .attr('transform', `translate(${0.2}, ${HEIGHT / 2 + 25})`);
-        g.append('g')
-         .call(yAxis);
-        g.selectAll('.domain')
-         .attr("fill", 'none')
-         .attr('stroke', 'black')
-         .attr('stroke-width', 1.5);
-        g.append('path')
-         .attr('fill', 'none')
-         .attr('stroke', 'steelblue')
-         .attr('stroke-linejoin', 'round')
-         .attr('stroke-linecap', 'round')
-         .attr('stroke-width', 1.5)
-         .attr('d', line(idx));
+                      .attr('height', HEIGHT);
+        const g = svg.append('g')
+                     .attr('transform', `translate(${30}, ${0})`);
+        const rect = g.append('rect')
+                      .attr('width', '100%')
+        const yAx = g.append('g')
+                     .call(yAxis);
+        const { height } = yAx.node().getBoundingClientRect();
+        rect.attr('height', height);
+        const sigLine = drawSignalLine(g, point, indexes);
+        const secondTicks = drawSecondTicks(g, yAx, tmin, tmax);
+        const zeroLine = drawZeroLine(g, tmin, tmax);
+        this.drawn.push({
+          point,
+          svg,
+          rect,
+          g,
+          sigLine,
+          secondTicks,
+          zeroLine,
+          yAx,
+          tagged: true });
       });
     });
+    this.drawn.forEach((drawn, i) => {
+      if(!drawn.tagged) {
+        drawn.svg.remove();
+      }
+    });
+    this.drawn = this.drawn.filter(drawn => drawn.tagged);
+    this.drawn.forEach((drawn, i) => {
+      if (i % 2 === 1) {
+        drawn.rect.attr('fill', '#eee');
+        return
+      }
+      drawn.rect.attr('fill', '#fff');
+    });
+    const drawXaxis = (orientation, drawn, xoffset, yoffset) => {
+      const xAxis = d3.svg.axis()
+                      .scale(x)
+                      .ticks(10)
+                      .outerTickSize(0)
+                      .orient(orientation);
+      return drawn.g.append('g')
+                    .call(xAxis)
+                    .attr('transform', `translate(${xoffset}, ${yoffset})`);
+    };
+    if (this.drawn.length > 0) {
+      this.xAxisTop = drawXaxis('bottom', this.drawn[0], 0, 0);
+      this.xAxisBottom = drawXaxis('bottom', this.drawn[this.drawn.length - 1], 0, HEIGHT);
+      this.drawn[this.drawn.length - 1].svg.attr('class', 'signal-plot-item last-plot')
+    }
+    d3.select(this.container)
+      .selectAll('.domain')
+      .attr("fill", 'none')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1.5);
   }
   render() {
-    return (
+    const onWheel = (dy) => {
+      const { tmin, tmax } = this.state.bounds;
+      if (tmax - tmin <= 5 && dy < 0) {
+        return;
+      }
+      if (tmax - tmin >= 65 && dy > 0) {
+        return;
+      }
+      this.setState({
+        bounds: {
+          tmin: tmin - Math.sign(dy) * ZOOM_AMOUNT * (tmax - tmin) / 15,
+          tmax: tmax + Math.sign(dy) * ZOOM_AMOUNT * (tmax - tmin) / 15
+        }
+      });
+    };
+    const onMouseMove = (dx) => {
+      if (!this.lastMouseX) {
+        return; // If no lastMouseX then the mouse is not clicked.
+      }
+      const width = this.width || 1.0;
+      const { tmin, tmax } = this.state.bounds;
+      this.lastMouseX += dx;
+      this.setState({
+        bounds: {
+          tmin: tmin - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width,
+          tmax: tmax - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width
+        }
+      });
+    };
+    const enabled = (text, incr) => (
       <div
-        className="signal-plots"
-        ref={(container) => { this.container = container; }}
+        className="signal-plots-button"
+        onClick={() => { this.setState({ page: this.state.page + incr }); }}
       >
+        {text}
+      </div>
+    );
+    const disabled = (text) => (
+      <div className="signal-plots-button disabled">
+        {text}
+      </div>
+    );
+    const numPoints = countNumPoints(this.props.selected);
+    const showNext = this.state.page < Math.floor(numPoints / PLOTS_PER_PAGE);
+    const showPrev = this.state.page > 0;
+    return (
+      <div className="signal-plots-container">
+        <div className="signal-plots-buttons">
+          {showPrev ? enabled('Previous', -1) : disabled('Previous')}
+          {showNext ? enabled('Next', +1) : disabled('Next')}
+          <div className="signal-plots-page-number">Page: {this.state.page + 1}</div>
+        </div>
+        <div
+          className="signal-plots"
+          ref={(container) => { this.container = container; }}
+          onWheel={(e) => { if (e.shiftKey) { e.preventDefault(); onWheel(e.deltaY); } }}
+          onMouseDown={(e) => { if (e.button === 0) { this.lastMouseX = e.clientX; } }}
+          onMouseMove={(e) => { onMouseMove(e.clientX - this.lastMouseX); }}
+        >
+        </div>
       </div>
     );
   }
@@ -229,9 +419,11 @@ class SignalPlots extends Component {
 export default class EEGBrowser extends Component {
   constructor(props) {
     super(props);
+    const regions = makeRegions(NUM_REGIONS)
     this.state = {
-      regions: makeRegions(NUM_REGIONS),
-      selected: [],
+      regions,
+      selected: [regions[0]],
+      expanded: false
     }
   }
   render() {
@@ -248,23 +440,39 @@ export default class EEGBrowser extends Component {
           .concat([region]) // select the region
       });
     };
+    const expandBar = (
+      <div
+        className="expand-bar"
+        onClick={() => this.setState({ expanded: !this.state.expanded })}
+      >
+        <span className="expand-bar-icon">{this.state.expanded ? '>' : '<'}</span>
+      </div>
+    );
+    const regionSelect = (
+      <RegionSelect
+        regions={this.state.regions}
+        selected={this.state.selected}
+        unselectRegion={unselectRegion}
+        selectRegion={selectRegion}
+        hoverRegion={(region) => { this.setState({ hoveredRegion: region }); }}
+        onMouseLeave={() => { this.setState({ hoveredRegion: null }); }}
+      >
+      </RegionSelect>
+    );
+    const mriView = (
+      <MRIView
+        regions={this.state.regions}
+        selected={this.state.selected}
+        hoveredRegion={this.state.hoveredRegion}
+        showMRI={!this.state.expanded}
+      >
+      </MRIView>
+    );
     return (
       <div className="eeg-browser">
-        <RegionSelect
-          regions={this.state.regions}
-          selected={this.state.selected}
-          unselectRegion={unselectRegion}
-          selectRegion={selectRegion}
-          hoverRegion={(region) => { this.setState({ hoveredRegion: region }); }}
-          onMouseLeave={() => { this.setState({ hoveredRegion: null }); }}
-        >
-        </RegionSelect>
-        <MRIView
-          regions={this.state.regions}
-          selected={this.state.selected}
-          hoveredRegion={this.state.hoveredRegion}
-        >
-        </MRIView>
+        {this.state.expanded ? null : regionSelect}
+        {mriView}
+        {expandBar}
         <SignalPlots
           selected={this.state.selected}
         >

@@ -1,6 +1,6 @@
 import { VERTEX, FRAGMENT } from './Shaders';
 
-const MRI_URL = '/eegbrowser/static/full8_400um_optbal.mnc'
+const MRI_URL = '/eegbrowser/static/samir_mri.mnc'
 export default class MRILoader {
   constructor(scene) {
     this.scene = scene;

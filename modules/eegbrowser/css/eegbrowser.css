@@ -1,4 +1,5 @@
 .eeg-browser {
+  display: -ms-flexbox;
   display: flex;
   flex-direction: row;
 }
@@ -11,14 +12,105 @@
   margin: 10px 10px;
 }
 
+.expand-bar {
+  display: -ms-flexbox;
+  display: flex;
+
+  flex: 1;
+  min-width: 20px;
+  max-width: 20px;
+  margin-left: 15px;
+  background-color: #888;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.expand-bar:hover {
+  background-color: #aaa;
+}
+
+.expand-bar-icon {
+  display: -ms-flexbox;
+  display: flex;
+  color: #fff;
+}
+
 .mri-view-container {
   flex: 1;
 }
 
-.signal-plots {
+.signal-plots-container {
+  display: -ms-flexbox;
   display: flex;
-  flex: 2;
-  height: 800px;
+
+  flex: 3;
+  max-height: 800px;
+  flex-direction: column;
+}
+
+.signal-plots-buttons {
+  display: -ms-flexbox;
+  display: flex;
+
+  flex: 1;
+  flex-direction: row;
+  min-height: 40px;
+  max-height: 40px;
+}
+
+.signal-plots-button {
+  background-color: #064785;
+  color: #fff;
+  height: 30px;
+  padding: 5px 5px;
+  margin: 0 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.signal-plots-button.disabled {
+  background-color: #aaaaaa;
+  color: #fff;
+  height: 30px;
+  padding: 5px 5px;
+  margin: 0 15px;
+  border-radius: 5px;
+  cursor: not-allowed;
+}
+
+.signal-plots-page-number {
+  padding: 5px 5px;
+}
+
+.signal-plots {
+  display: -ms-flexbox;
+  display: flex;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  flex: 1;
   flex-direction: column;
   overflow-y: scroll;
+  max-height: 900px
+  font-size: 0;
+  padding-bottom: 30px;
+}
+
+.signal-plot-item {
+  font-size: 1.3rem;
+  width: 100%;
+  min-height: 100px;
+}
+
+.signal-plot-item.last-plot {
+  min-height: 130px;
 }

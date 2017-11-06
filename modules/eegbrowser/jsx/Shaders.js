@@ -52,7 +52,8 @@ export const FRAGMENT = `
   }
   // return the color corresponding to the given shifted world cooridinates
   // using a neirest neighbors approx (no interpolation)
-  vec4 getIntensityWorldNearest(vec3 swc, int timeRecord){
+  vec4 getIntensityWorldNearest(vec3 swcin, int timeRecord){
+    vec3 swc = swcin.xzy;
     // step to jump from a slice to another on a unit-sized texture
     float sliceWidth = 1.0 / nbSlicePerRow;
     float sliceHeight = 1.0 / nbSlicePerCol;
