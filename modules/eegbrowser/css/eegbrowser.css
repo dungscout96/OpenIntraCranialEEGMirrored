@@ -12,6 +12,13 @@
   margin: 10px 10px;
 }
 
+.region-color-code {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 10px;
+}
+
 .expand-bar {
   display: -ms-flexbox;
   display: flex;
@@ -49,15 +56,21 @@
   max-height: 800px;
   flex-direction: column;
 }
+.signal-plots-toolbar {
+  display: -ms-flexbox;
+  display: flex;
+  flex-direction: row;
+  min-height: 40px;
+  max-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+}
 
 .signal-plots-buttons {
   display: -ms-flexbox;
   display: flex;
-
   flex: 1;
   flex-direction: row;
-  min-height: 40px;
-  max-height: 40px;
 }
 
 .signal-plots-button {
@@ -68,7 +81,7 @@
   margin: 0 15px;
   border-radius: 5px;
   cursor: pointer;
-  
+
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -85,7 +98,7 @@
   cursor: not-allowed;
 }
 
-.signal-plots-page-number {
+.signal-plots-group-number {
   padding: 5px 5px;
 }
 

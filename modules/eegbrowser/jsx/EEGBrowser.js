@@ -6,9 +6,10 @@ const POINTS_PER_REGION = 30;
 const SAMPLES_PER_POINT = 500;
 
 class Region {
-  constructor(name, label, center) {
+  constructor(name, label, center, color = { r: 0, g: 0, b: 0 }) {
     this.name = name;
     this.label = label;
+    this.color = color;
     this.points = [];
     this.generatePoints(POINTS_PER_REGION, center);
   }
@@ -18,13 +19,14 @@ class Region {
       point[0] += center[0]
       point[1] += center[1]
       point[2] += center[2]
-      this.points.push(new Point(point, SAMPLES_PER_POINT));
+      this.points.push(new Point(`${this.name} : point_${i}`, point, SAMPLES_PER_POINT));
     }
   }
 }
 
 class Point {
-  constructor(position, timeSamples, tmin = 0, tmax = 60) {
+  constructor(name, position, timeSamples, tmin = 0, tmax = 60) {
+    this.name = name;
     this.tmin = tmin;
     this.tmax = tmax;
     this.domain = new Float32Array(timeSamples).fill(0)
@@ -43,9 +45,11 @@ class Point {
 
 function makeRegions(numRegions) {
   const regions = [];
+  const rc = () => Math.floor(Math.random() * 250);
   for (let i = 0; i < numRegions; i += 1) {
     const center = new Array(3).fill(0).map(() => (2.0 * Math.random() - 1.0));
-    const region = new Region(`region${i}`, `Region ${i}`, center);
+    const color = {r: rc(), g: rc(), b: rc()}
+    const region = new Region(`region${i}`, `Region ${i}`, center, color);
     regions.push(region);
   }
   return regions;
@@ -60,17 +64,25 @@ class RegionSelect extends Component {
     };
   }
   render() {
-    const regionElement = (region, selected, onclick) => (
-      <li
-        key={region.name}
-        className={`region-item ${selected ? 'selected-region' : 'unselected-region'}`}
-        onClick={() => onclick(region)}
-        onMouseEnter={() => { this.props.hoverRegion(region); }}
-        onMouseLeave={() => { this.props.hoverRegion(region); }}
-      >
-        {region.label + (selected ? '*' : '')}
-      </li>
-    );
+    const regionElement = (region, selected, onclick) => {
+      const c = region.color;
+      return (
+        <li
+          key={region.name}
+          className={`region-item ${selected ? 'selected-region' : 'unselected-region'}`}
+          onClick={() => onclick(region)}
+          onMouseEnter={() => { this.props.hoverRegion(region); }}
+          onMouseLeave={() => { this.props.hoverRegion(region); }}
+        >
+          <div
+            className="region-color-code"
+            style={{ 'backgroundColor': `rgb(${c.r}, ${c.g}, ${c.b})` }}
+          >
+          </div>
+          {region.label + (selected ? '*' : '')}
+        </li>
+      );
+    };
     const regionElements = this.props.regions.map((region) => {
       if (this.props.selected.find(r => r === region)) {
         return regionElement(region, true, this.props.unselectRegion);
@@ -170,7 +182,7 @@ class MRIView extends Component {
 
 const ZOOM_AMOUNT = 1;
 const INTERVAL_MOVE_AMOUNT = 1;
-const PLOTS_PER_PAGE = 7;
+const PLOTS_PER_GROUP = 7;
 
 const countNumPoints = regions => regions.map(r => r.points.length).reduce((a,b) => a + b, 0);
 
@@ -180,14 +192,16 @@ class SignalPlots extends Component {
     this.lastMouseX = null;
     this.drawn = [];
     this.state = {
+      cursorX: null,
       bounds: { tmin: -0.1, tmax: 25 },
-      page: 0
+      group: 0
     };
   }
   componentWillReceiveProps(nextProps) {
-    const maxPage = Math.floor(countNumPoints(nextProps.selected) / PLOTS_PER_PAGE);
-    const newPage = this.state.page > maxPage ? maxPage : this.state.page;
-    this.setState({ page : newPage });
+    const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
+    const numPlots = countNumPoints(nextProps.selected);
+    const newGroup = minPlot > numPlots ? Math.floor(numPlots / PLOTS_PER_GROUP) : this.state.group;
+    this.setState({ group : newGroup });
   }
   componentDidMount() {
     // If user mouses up anywhere in the browser window stop translating time interval.
@@ -210,9 +224,17 @@ class SignalPlots extends Component {
       this.xAxisBottom.remove();
       this.xAxisBottom = undefined;
     }
+    let pageUpdate = false;
+    if (this.state.group !== this.lastGroup) {
+      this.lastGroup = this.state.group;
+      pageUpdate = true;
+    }
     const x = d3.scale.linear()
                 .domain([tmin, tmax])
                 .rangeRound([0, this.width]);
+    const xInv = d3.scale.linear()
+                .domain([0, this.width])
+                .range([tmin, tmax]);
     const y = d3.scale.linear()
                 .domain([-1.7, 1.7])
                 .rangeRound([HEIGHT, 0]);
@@ -248,6 +270,14 @@ class SignalPlots extends Component {
       }
       return secondTicks;
     };
+    const drawCursorTick = (g, yAxis, x) => {
+      const { height } = yAxis.node().getBoundingClientRect();
+      return g.append('line')
+              .attr({x1: x, y1: 0})
+              .attr({x2: x, y2: height})
+              .attr('stroke-width', 1)
+              .attr('stroke', '#900');
+    }
     const drawZeroLine = (g, tmin, tmax) => {
       return g.append('line')
               .attr({ x1: x(tmin), y1: y(0)})
@@ -263,28 +293,47 @@ class SignalPlots extends Component {
     this.props.selected.forEach((region) => {
       region.points.forEach((point) => {
         numPoints++;
-        if (numPoints < (PLOTS_PER_PAGE - 1) * this.state.page ||
-            numPoints > (PLOTS_PER_PAGE - 1) * (this.state.page + 1)
+        if (numPoints < (PLOTS_PER_GROUP - 1) * this.state.group ||
+            numPoints > (PLOTS_PER_GROUP - 1) * (this.state.group + 1)
         ) {
           return;
         }
         // Only filter out array indices where time values in the domain are in bounds.
+        let cursIndex = null;
+        let cursTime = 'NA';
+        let cursVal = 'NA';
+        if (this.state.cursorX) {
+          cursTime = Math.floor(xInv(this.state.cursorX) * 100) / 100;
+        }
+        const ts = point.domain;
         const indexFilter = (indexes, t, i) => {
+          if (cursTime !== 'NA') {
+            if (i < ts.length + 1 && i < point.signal.length && cursTime >= t && cursTime < ts[i+1]) {
+              cursVal = Math.floor(point.signal[i] * 100) / 100;
+            }
+          }
           if (t >= tmin && t <= tmax) {
             indexes.push(i)
           }
           return indexes;
         }
-        const indexes = point.domain.reduce(indexFilter, []);
+        const indexes = ts.reduce(indexFilter, []);
         const drawn = this.drawn.find(d => d.point === point)
-        if (drawn) {
+        if (!pageUpdate && drawn) {
           const { g, sigLine, secondTicks, zeroLine, yAx } = drawn;
           sigLine.remove();
+          if (drawn.cursorTick) {
+            drawn.cursorTick.remove();
+          }
           secondTicks.remove();
           zeroLine.remove();
           yAx.call(yAxis);
+          drawn.pointName.text(`${point.name} | time: ${cursTime}s | value: ${cursVal}uV`);
           drawn.sigLine = drawSignalLine(g, point, indexes);
           drawn.secondTicks = drawSecondTicks(g, yAx, tmin, tmax);
+          if (this.state.cursorX) {
+            drawn.cursorTick = drawCursorTick(g, yAx, this.state.cursorX);
+          }
           drawn.zeroLine = drawZeroLine(g, tmin, tmax);
           drawn.tagged = true;
           return;
@@ -300,8 +349,23 @@ class SignalPlots extends Component {
         const yAx = g.append('g')
                      .call(yAxis);
         const { height } = yAx.node().getBoundingClientRect();
+        const c = region.color;
+        const regionColorCode = svg.append('line')
+                                   .attr({ x1: 5, y1: 0 })
+                                   .attr({ x2: 5, y2: height })
+                                   .attr('stroke-width', 4)
+                                   .attr('stroke', `rgba(${c.r}, ${c.g}, ${c.b}, 1.0)`);
+        const pointName = g.append('text')
+                           .attr('x', 5)
+                           .attr('y', height - 6)
+                           .attr('font-size', 13)
+                           .text(`${point.name} | time: ${cursTime}s | value: ${cursVal}uV`);
         rect.attr('height', height);
         const sigLine = drawSignalLine(g, point, indexes);
+        let cursorTick = null;
+        if (this.state.cursorX) {
+          cursorTick = drawCursorTick(g, yAx, this.state.cursorX);
+        }
         const secondTicks = drawSecondTicks(g, yAx, tmin, tmax);
         const zeroLine = drawZeroLine(g, tmin, tmax);
         this.drawn.push({
@@ -309,7 +373,9 @@ class SignalPlots extends Component {
           svg,
           rect,
           g,
+          pointName,
           sigLine,
+          cursorTick,
           secondTicks,
           zeroLine,
           yAx,
@@ -341,7 +407,19 @@ class SignalPlots extends Component {
     };
     if (this.drawn.length > 0) {
       this.xAxisTop = drawXaxis('bottom', this.drawn[0], 0, 0);
+      this.xAxisTop.append('text')
+                   .attr('x', -23)
+                   .attr('y', 10)
+                   .text('uV');
       this.xAxisBottom = drawXaxis('bottom', this.drawn[this.drawn.length - 1], 0, HEIGHT);
+      this.xAxisBottom.append('text')
+                      .attr('x', 5)
+                      .attr('y', 28)
+                      .text('time (sec)');
+      this.xAxisBottom.append('text')
+                      .attr('x', -23)
+                      .attr('y', 7)
+                      .text('uV');
       this.drawn[this.drawn.length - 1].svg.attr('class', 'signal-plot-item last-plot')
     }
     d3.select(this.container)
@@ -380,34 +458,65 @@ class SignalPlots extends Component {
         }
       });
     };
+    const onMouseDown = (shift, leftClick, clientX, target) => {
+      const { left } = target.getBoundingClientRect();
+      if (shift && leftClick) {
+        this.lastMouseX = clientX;
+        return;
+      }
+      if (!shift && leftClick) {
+        this.setState({ cursorX: clientX - left });
+      }
+    }
     const enabled = (text, incr) => (
       <div
         className="signal-plots-button"
-        onClick={() => { this.setState({ page: this.state.page + incr }); }}
+        onClick={() => { this.setState({ group: this.state.group + incr }); }}
       >
         {text}
       </div>
     );
-    const disabled = (text) => (
+    const disabled = text => (
       <div className="signal-plots-button disabled">
         {text}
       </div>
     );
+    const filterOptions = [{ type: 'Smooth' }, { type: 'Low Pass'}, { type: 'High Pass' }, { type: 'Kalman' }];
+    const optionElem = option => (
+      <option key={option.type} value={option.type}>
+        {option.type}
+      </option>
+    );
     const numPoints = countNumPoints(this.props.selected);
-    const showNext = this.state.page < Math.floor(numPoints / PLOTS_PER_PAGE);
-    const showPrev = this.state.page > 0;
+    const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
+    let maxPlot = (PLOTS_PER_GROUP - 1) * (this.state.group + 1);
+    const showNext = maxPlot < numPoints
+    const showPrev = this.state.group > 0;
+    if (minPlot + (PLOTS_PER_GROUP - 1) >= numPoints) {
+      maxPlot = maxPlot - (numPoints - (minPlot + (PLOTS_PER_GROUP - 1))) - 1;
+    }
     return (
       <div className="signal-plots-container">
-        <div className="signal-plots-buttons">
-          {showPrev ? enabled('Previous', -1) : disabled('Previous')}
-          {showNext ? enabled('Next', +1) : disabled('Next')}
-          <div className="signal-plots-page-number">Page: {this.state.page + 1}</div>
+        <div className="signal-plots-toolbar">
+          <div className="signal-plots-buttons">
+            {showPrev ? enabled('Previous', -1) : disabled('Previous')}
+            {showNext ? enabled('Next', +1) : disabled('Next')}
+            <div className="signal-plots-group-number">
+              Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numPoints}
+            </div>
+          </div>
+          <div className="signal-plots-filters">
+            <select>
+              {filterOptions.map(o => (optionElem(o)))}
+            </select>
+          </div>
+          <div className="signal-plots-slider"></div>
         </div>
         <div
           className="signal-plots"
           ref={(container) => { this.container = container; }}
           onWheel={(e) => { if (e.shiftKey) { e.preventDefault(); onWheel(e.deltaY); } }}
-          onMouseDown={(e) => { if (e.button === 0) { this.lastMouseX = e.clientX; } }}
+          onMouseDown={(e) => { onMouseDown(e.shiftKey, e.button === 0, e.clientX, e.target); }}
           onMouseMove={(e) => { onMouseMove(e.clientX - this.lastMouseX); }}
         >
         </div>
