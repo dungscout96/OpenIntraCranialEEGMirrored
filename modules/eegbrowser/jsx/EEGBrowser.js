@@ -4,6 +4,86 @@ import MRILoader from './MRILoader';
 const NUM_REGIONS = 8;
 const POINTS_PER_REGION = 30;
 const SAMPLES_PER_POINT = 500;
+const LOW_PASS_FILTERS = [
+  {
+    key: 'none',
+    label: 'No Filter'
+  },
+  {
+    key: 'lopass15',
+    label: 'Low Pass 15Hz'
+  },
+  {
+    key: 'lopass20',
+    label: 'Low Pass 20Hz'
+  },
+  {
+    key: 'lopass30',
+    label: 'Low Pass 30Hz'
+  },
+  {
+    key: 'lopass40',
+    label: 'Low Pass 40Hz'
+  }
+];
+
+const HIGH_PASS_FILTERS = [
+  {
+    key: 'none',
+    label: 'No Filter'
+  },
+  {
+    key: 'hipass0_5',
+    label: 'High Pass 0.5Hz'
+  },
+  {
+    key: 'hipass1',
+    label: 'High Pass 1Hz'
+  },
+  {
+    key: 'hipass5',
+    label: 'High Pass 5Hz'
+  },
+  {
+    key: 'hipass10',
+    label: 'High Pass 10Hz'
+  }
+];
+
+const FILTERS = {
+  lopass15: {
+    b: [0.080716994603448, 0.072647596309189, 0.080716994603448],
+    a: [1.000000000000000, -1.279860238209870, 0.527812029663189]
+  },
+  lopass20: {
+    b: [0.113997925584386, 0.149768961515167, 0.113997925584386],
+    a: [1.000000000000000, -1.036801335341888, 0.436950120418250]
+  },
+  lopass30: {
+    b: [0.192813914343002, 0.325725940431161, 0.192813914343002],
+    a: [1.000000000000000, -0.570379950222695, 0.323884080078956]
+  },
+  lopass40: {
+    b: [0.281307434361307, 0.517866041871659, 0.281307434361307],
+    a: [1.000000000000000, -0.135289362582513, 0.279792792112445]
+  },
+  hipass0_5: {
+    b: [0.937293010134975, -1.874580964130496, 0.937293010134975],
+    a: [1.000000000000000, -1.985579602684723, 0.985739491853153]
+  },
+  hipass1: {
+    b: [0.930549324176904, -1.861078566912498, 0.930549324176904],
+    a: [1.000000000000000, -1.971047525054235, 0.971682555986628]
+  },
+  hipass5: {
+    b: [0.877493430773021, -1.754511635757187, 0.877493430773021],
+    a: [1.000000000000000, -1.851210698908115, 0.866238657864428]
+  },
+  hipass10: {
+    b: [0.813452161011750, -1.625120853023986, 0.813452161011750],
+    a: [1.000000000000000, -1.694160769645868, 0.750559011393507]
+  }
+}
 
 class Region {
   constructor(name, label, center, color = { r: 0, g: 0, b: 0 }) {
@@ -29,17 +109,39 @@ class Point {
     this.name = name;
     this.tmin = tmin;
     this.tmax = tmax;
-    this.domain = new Float32Array(timeSamples).fill(0)
+    this.domain = new Float32Array(timeSamples).fill(0);
     this.domain.forEach((_, i) => {
       const t = i / timeSamples;
       this.domain[i] = tmin * (1 - t) + tmax * t;
     });
-    this.signal = new Float32Array(timeSamples).fill(0)
-    this.signal.forEach((_, i) => {
-      this.signal[i] = 2.0 * Math.random() - 1.0;
+    this.originalSignal = new Float32Array(timeSamples).fill(0);
+    this.originalSignal.forEach((_, i) => {
+      this.originalSignal[i] = 2.0 * Math.random() - 1.0;
     });
     this.position = position;
     this.hovered = false;
+    this.signal = this.originalSignal;
+    this.filters = {};
+  }
+  applyFilter(lowPassFilterName, highPassFilterName) {
+    if (this.filters.low === lowPassFilterName && this.filters.hi === highPassFilterName) {
+      return; // Don't apply filters more than once
+    }
+    const diffFilter = new differenceequationsignal1d.DifferenceEquationSignal1D();
+    diffFilter.enableBackwardSecondPass
+    const doFilterUpdate = (coefficients, input) => {
+      if (coefficients) {
+        diffFilter.setInput(input);
+        diffFilter.setACoefficients(coefficients.a);
+        diffFilter.setBCoefficients(coefficients.b);
+        diffFilter.run() // eventually should be pixpipe's update()
+        this.signal = diffFilter.getOutput(); 
+        return;
+      }
+      this.signal = input;
+    };
+    doFilterUpdate(FILTERS[lowPassFilterName], this.originalSignal);
+    doFilterUpdate(FILTERS[highPassFilterName], this.signal);
   }
 }
 
@@ -180,6 +282,28 @@ class MRIView extends Component {
   }
 }
 
+class FilterSelect extends Component {
+  constructor(props) {
+    super(props);
+  }
+  render() {
+    const optionElement = option => (
+      <option key={option.key} value={option.key}>
+        {option.label}
+      </option>
+    );
+    return (
+      <select
+        className='signal-filter-dropdown'
+        onChange={ (e) => { this.props.onChange(e.target.value); }}
+        value={this.props.filter}
+      >
+        {this.props.filters.map(optionElement)}
+      </select>
+    );
+  }
+}
+
 const ZOOM_AMOUNT = 1;
 const INTERVAL_MOVE_AMOUNT = 1;
 const PLOTS_PER_GROUP = 7;
@@ -194,6 +318,7 @@ class SignalPlots extends Component {
     this.state = {
       cursorX: null,
       bounds: { tmin: -0.1, tmax: 25 },
+      filters: { low: 'none', hi: 'none' },
       group: 0
     };
   }
@@ -298,6 +423,7 @@ class SignalPlots extends Component {
         ) {
           return;
         }
+        point.applyFilter(this.state.filters.low, this.state.filters.hi);
         // Only filter out array indices where time values in the domain are in bounds.
         let cursIndex = null;
         let cursTime = 'NA';
@@ -338,6 +464,7 @@ class SignalPlots extends Component {
           drawn.tagged = true;
           return;
         }
+        // Create new plot shapes in d3
         const svg = d3.select(this.container)
                       .append('svg')
                       .attr('class', 'signal-plot-item')
@@ -379,7 +506,8 @@ class SignalPlots extends Component {
           secondTicks,
           zeroLine,
           yAx,
-          tagged: true });
+          tagged: true
+	});
       });
     });
     this.drawn.forEach((drawn, i) => {
@@ -481,12 +609,6 @@ class SignalPlots extends Component {
         {text}
       </div>
     );
-    const filterOptions = [{ type: 'Smooth' }, { type: 'Low Pass'}, { type: 'High Pass' }, { type: 'Kalman' }];
-    const optionElem = option => (
-      <option key={option.type} value={option.type}>
-        {option.type}
-      </option>
-    );
     const numPoints = countNumPoints(this.props.selected);
     const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
     let maxPlot = (PLOTS_PER_GROUP - 1) * (this.state.group + 1);
@@ -495,6 +617,12 @@ class SignalPlots extends Component {
     if (minPlot + (PLOTS_PER_GROUP - 1) >= numPoints) {
       maxPlot = maxPlot - (numPoints - (minPlot + (PLOTS_PER_GROUP - 1))) - 1;
     }
+    const selectLow = (value) => {
+      this.setState({ filters: { low: value, hi: this.state.filters.hi } });
+    };
+    const selectHi = (value) => {
+      this.setState({ filters: { low: this.state.filters.low, hi: value } });
+    };
     return (
       <div className="signal-plots-container">
         <div className="signal-plots-toolbar">
@@ -506,9 +634,8 @@ class SignalPlots extends Component {
             </div>
           </div>
           <div className="signal-plots-filters">
-            <select>
-              {filterOptions.map(o => (optionElem(o)))}
-            </select>
+            <FilterSelect filters={LOW_PASS_FILTERS} filter={this.state.filters.low} onChange={selectLow} />
+            <FilterSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
           </div>
           <div className="signal-plots-slider"></div>
         </div>

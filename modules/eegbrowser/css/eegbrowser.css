@@ -88,6 +88,16 @@
   user-select: none;
 }
 
+.signal-plots-filters {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.signal-filter-dropdown {
+  margin: 0 10px;
+}
+
 .signal-plots-button.disabled {
   background-color: #aaaaaa;
   color: #fff;

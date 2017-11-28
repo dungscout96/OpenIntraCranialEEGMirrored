@@ -54,6 +54,7 @@ class NDB_Form_eegbrowser extends \NDB_Form
              $baseURL . "/eegbrowser/js/three.min.js",
              $baseURL . "/eegbrowser/js/OrbitControls.js",
              $baseURL . "/eegbrowser/js/pixpipe.min.js",
+             $baseURL . "/eegbrowser/js/differenceequationsignal1d.min.js",
              $baseURL . "/eegbrowser/js/EEGBrowser.js",
             )
         );
