@@ -406,8 +406,7 @@ export default class EEGBrowser extends Component {
       >
       </RegionSelect>
     );
-    const mriView = (''
-      /*
+    const mriView = (
       <MRIView
         regions={this.state.regions}
         selected={this.state.selected}
@@ -415,7 +414,6 @@ export default class EEGBrowser extends Component {
         showMRI={!this.state.expanded}
       >
       </MRIView>
-      */
     );
     return (
       <div className="eeg-browser">

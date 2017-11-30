@@ -71,8 +71,8 @@ const drawSecondTicks = (g, height, xScale, tmin, tmax) => {
 
 const drawCursorTick = (g, height, x) => {
   return g.append('line')
-          .attr({x1: x, y1: 0})
-          .attr({x2: x, y2: height})
+          .attr({ x1: x, y1: 0 })
+          .attr({ x2: x, y2: height })
           .attr('stroke-width', 1)
           .attr('stroke', '#900');
 }
@@ -89,7 +89,7 @@ export class SignalPlot extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      yBounds: { ymin: -1.7, ymax: 1.7 }
+      yBounds: { ymin: -2.1, ymax: 2.1 }
     };
     this.svg = null;
   }
@@ -161,6 +161,32 @@ export class SignalPlot extends Component {
   componentDidUpdate() {
     this.updatePlot();
   }
+  drawYScaleButton(parent, symbol, multiplier, x, y) {
+    const g = parent.append('g').attr('transform', `translate(${x}, ${y})`);
+    g.attr('class', 'plot-scale-button').attr('cursor', 'pointer');
+    g.append('rect')
+     .attr('x', -3)
+     .attr('y', -11)
+     .attr('width', '14px')
+     .attr('height', '14px')
+     .attr('fill', '#aaa')
+    g.append('text')
+     .attr('x', 0)
+     .attr('y', 0)
+     .attr('font-weight', 'bold')
+     .attr('fill', '#000')
+     .text(symbol);
+    g.on('mousedown', () => {
+      d3.event.stopPropagation();
+      if (d3.event.button === 0) {
+        let { ymin, ymax } = this.state.yBounds;
+        ymin *= multiplier;
+        ymax *= multiplier;
+        this.setState({ yBounds: { ymin, ymax } });
+      }
+    });
+    return g;
+  };
   drawXAxes(svg, parent, height) {
     let xAx = null;
     const { x, y } = this.getD3Scales();
@@ -212,10 +238,12 @@ export class SignalPlot extends Component {
       sigLine,
       cursorTick,
       secondTicks,
-      zeroLine
+      zeroLine,
+      btnPlus,
+      btnMinus
     } = this.plot;
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    channelName.text(`${channel.name} | time: ${cursTime}s | value: ${cursVal}uV`);
+    channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     if (cursorTick) {
       cursorTick.remove();
     }
@@ -231,20 +259,12 @@ export class SignalPlot extends Component {
     this.plot.sigLine = drawSignalLine(g, x, y, channel, indexes);
     secondTicks.remove();
     this.plot.secondTicks = drawSecondTicks(g, height, x, tmin, tmax);
+    g.node().removeChild(btnPlus.node())
+    g.node().appendChild(btnPlus.node());
+    g.node().removeChild(btnMinus.node())
+    g.node().appendChild(btnMinus.node());
   }
   renderPlot() {
-    const drawYScaleButton = (parent, symbol, multiplier, x, y) => {
-      const g = g.append('g');
-      g.append('text')
-       .attr('transform', `translate(${x}, ${y})`)
-       .text(symbol);
-      g.on('mousedown', () => {
-        let { ymin, ymax } = this.state.yBounds;
-        ymin *= multiplier;
-        ymax *= multiplier;
-        this.setState({ yBounds: { ymin, ymax } });
-      });
-    };
     const { channel } = this.props;
     const { tmin, tmax } = this.props.tBounds;
     const { x, xInv, y } = this.getD3Scales();
@@ -275,7 +295,7 @@ export class SignalPlot extends Component {
       rect.attr('fill', this.props.backgroundColor);
     }
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    channelName.text(`${channel.name} | time: ${cursTime}s | value: ${cursVal}uV`);
+    channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     const sigLine = drawSignalLine(g, x, y, channel, indexes);
     let cursorTick = null;
     if (this.props.cursorX) {
@@ -287,6 +307,9 @@ export class SignalPlot extends Component {
     if (this.props.drawXAxis) {
       xAx = this.drawXAxes(svg, g, height);
     }
+
+    const btnPlus = this.drawYScaleButton(g, '+', 1.1, width - 25, 20);
+    const btnMinus = this.drawYScaleButton(g, '-', 0.9, width - 25, height - 10);
     this.plot = {
       svg,
       g,
@@ -300,7 +323,9 @@ export class SignalPlot extends Component {
       sigLine,
       cursorTick,
       secondTicks,
-      zeroLine
+      zeroLine,
+      btnPlus,
+      btnMinus
     };
   }
   render() {
