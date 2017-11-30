@@ -233,30 +233,32 @@ class SignalPlots extends Component {
         }
       });
     };
-    const onMouseMove = (dx) => {
+    const onMouseMove = (shift, leftClick, x) => {
       if (!this.lastMouseX) {
-        return; // If no lastMouseX then the mouse is not clicked.
-      }
-      const { width } = this.container.getBoundingClientRect();
-      const { tmin, tmax } = this.state.tBounds;
-      this.lastMouseX += dx;
-      this.setState({
-        tBounds: {
-          tmin: tmin - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width,
-          tmax: tmax - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width
-        }
-      });
-    };
-    const onMouseDown = (shift, leftClick, clientX, target) => {
-      const { left } = target.getBoundingClientRect();
-      if (shift && leftClick) {
-        this.lastMouseX = clientX;
+        this.lastMouseX = x;
         return;
       }
-      if (!shift && leftClick) {
-        this.setState({ cursorX: clientX - left });
+      const { width, left } = this.container.getBoundingClientRect();
+      const { tmin, tmax } = this.state.tBounds;
+      const dx = x - this.lastMouseX;
+      this.lastMouseX = x;
+      if (shift && leftClick) {
+        this.setState({
+          tBounds: {
+            tmin: tmin - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width,
+            tmax: tmax - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width
+          }
+        });
       }
-    }
+      if (!shift && leftClick) {
+        const xInv = d3.scale.linear()
+                       .domain([30, width - 15])
+                       .range([tmin, tmax]);
+        if (x - left > 30) {
+          this.setState({ cursorX: xInv(x - left) });
+        }
+      }
+    };
     const enabled = (text, incr) => (
       <div
         className="signal-plots-button"
@@ -353,8 +355,7 @@ class SignalPlots extends Component {
           className="signal-plots"
           ref={(container) => { this.container = container; }}
           onWheel={(e) => { if (e.shiftKey) { e.preventDefault(); onWheel(e.deltaY); } }}
-          onMouseDown={(e) => { onMouseDown(e.shiftKey, e.button === 0, e.clientX, e.target); }}
-          onMouseMove={(e) => { onMouseMove(e.clientX - this.lastMouseX); }}
+          onMouseMove={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}
         >
           {plotElements}
         </div>
