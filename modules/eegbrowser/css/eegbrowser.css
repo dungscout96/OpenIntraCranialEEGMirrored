@@ -51,7 +51,8 @@
 }
 
 .mri-view-container {
-  flex: 1;
+  flex: 2;
+  align-items: center;
 }
 
 .signal-plots-container {
@@ -62,7 +63,14 @@
   max-height: 800px;
   flex-direction: column;
 }
+
 .signal-plots-toolbar {
+  display: -ms-flexbox;
+  display: flex;
+  flex-direction: column;
+}
+
+.signal-plots-toolbar-layer {
   display: -ms-flexbox;
   display: flex;
   flex-direction: row;
@@ -126,10 +134,10 @@
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+
   flex: 1;
   flex-direction: column;
   overflow-y: scroll;
-  max-height: 900px
   font-size: 0;
   padding-bottom: 30px;
 }
@@ -137,7 +145,6 @@
 .signal-plot-item {
   font-size: 1.3rem;
   width: 100%;
-  min-height: 100px;
 }
 
 .plot-scale-button {

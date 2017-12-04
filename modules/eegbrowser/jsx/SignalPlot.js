@@ -42,9 +42,9 @@ export class Channel {
   }
 }
 
-const drawSignalLine = (g, xScale, yScale, channel, indexes) => {
+const drawSignalLine = (g, tScale, yScale, channel, indexes) => {
   const signalLine = d3.svg.line()
-                       .x(i => xScale(channel.domain[i] || 0))
+                       .x(i => tScale(channel.domain[i] || 0))
                        .y(i => yScale(channel.signal[i] || 0));
   return g.append('path')
           .attr('fill', 'none')
@@ -55,14 +55,14 @@ const drawSignalLine = (g, xScale, yScale, channel, indexes) => {
           .attr('d', signalLine(indexes));
 };
 
-const drawSecondTicks = (g, height, xScale, tmin, tmax) => {
+const drawSecondTicks = (g, height, tScale, tmin, tmax) => {
   const ctmin = Math.ceil(tmin);
   const ctmax = Math.ceil(tmax);
   const secondTicks = g.append('g');
   for (let t = ctmin; t < ctmax; t++) {
     secondTicks.append('line')
-               .attr({x1: xScale(t), y1: 0})
-               .attr({x2: xScale(t), y2: height})
+               .attr({x1: tScale(t), y1: 0})
+               .attr({x2: tScale(t), y2: height})
                .attr('stroke-width', 1)
                .attr('stroke', '#999');
   }
@@ -77,10 +77,10 @@ const drawCursorTick = (g, height, x) => {
           .attr('stroke', '#900');
 }
 
-const drawZeroLine = (g, xScale, yScale, tmin, tmax) => {
+const drawZeroLine = (g, tScale, yScale, tmin, tmax) => {
   return g.append('line')
-          .attr({ x1: xScale(tmin), y1: yScale(0)})
-          .attr({ x2: xScale(tmax), y2: yScale(0)})
+          .attr({ x1: tScale(tmin), y1: yScale(0)})
+          .attr({ x2: tScale(tmax), y2: yScale(0)})
           .attr('stroke-width', 1)
           .attr('stroke', '#555');
 };
@@ -88,41 +88,47 @@ const drawZeroLine = (g, xScale, yScale, tmin, tmax) => {
 export class SignalPlot extends Component {
   constructor(props) {
     super(props);
-    this.state = {
-      yBounds: { ymin: -2.1, ymax: 2.1 }
-    };
     this.svg = null;
   }
   getDimensions() {
     const { width, height } = this.props;
     if (!width) {
-      return { width: this.svg.getBoundingClientRect().width - 30, height };
+      return { width: this.svg.getBoundingClientRect().width - this.props.yAxisWidth || 60, height };
     }
     return { width, height }
   }
   getD3Scales() {
     const { channel } = this.props;
     const { tmin, tmax } = this.props.tBounds;
-    const { ymin, ymax } = this.state.yBounds;
+    const { ymin, ymax } = this.props.yBounds;
     const { width, height } = this.getDimensions();
-    const x = d3.scale.linear()
+    const t = d3.scale.linear()
                 .domain([tmin, tmax])
                 .rangeRound([0, width]);
+    const tInv = d3.scale.linear()
+                .domain([0, width])
+                .range([tmin, tmax]);
     const y = d3.scale.linear()
                 .domain([ymin, ymax])
                 .rangeRound([height, 0]);
-    return { x,  y };
+    const yInv = d3.scale.linear()
+                .domain([0, height])
+                .range([ymax, ymin]);
+    return { t, y, tInv, yInv };
   }
-  getD3Axes(xScale, yScale) {
+  getD3Axes() {
+    const {t, y, yInv} = this.getD3Scales();
     const xAxis = d3.svg.axis()
-                    .scale(xScale)
+                    .scale(t)
                     .ticks(10)
                     .outerTickSize(0)
                     .orient('bottom');
+    const upperYLabelVal = Math.round(yInv(this.props.height * (3 / 4)) * 10) / 10;
+    const lowerYLabelVal = Math.round(yInv(this.props.height * (1 / 4)) * 10) / 10;
     const yAxis = d3.svg.axis()
-                    .scale(yScale)
+                    .scale(y)
                     .ticks(0)
-                    .tickValues([-1, 0, 1])
+                    .tickValues([lowerYLabelVal, 0, upperYLabelVal])
                     .outerTickSize(0)
                     .orient('left');
     return { xAxis, yAxis };
@@ -130,7 +136,7 @@ export class SignalPlot extends Component {
   getSignalIndexes() {
     const { channel, cursorX } = this.props;
     const { tmin, tmax } = this.props.tBounds;
-    const { x } = this.getD3Scales();
+    const { t } = this.getD3Scales();
     let cursTime = 'NA';
     let cursVal = 'NA';
     if (cursorX) {
@@ -157,7 +163,7 @@ export class SignalPlot extends Component {
   componentDidUpdate() {
     this.updatePlot();
   }
-  drawYScaleButton(parent, symbol, multiplier, x, y) {
+  drawYScaleButton(parent, symbol, x, y) {
     const g = parent.append('g').attr('transform', `translate(${x}, ${y})`);
     g.attr('class', 'plot-scale-button').attr('cursor', 'pointer');
     g.append('rect')
@@ -173,31 +179,24 @@ export class SignalPlot extends Component {
      .attr('fill', '#000')
      .attr('text-anchor', 'middle')
      .text(symbol);
-    g.on('mousedown', () => {
-      d3.event.stopPropagation();
-      if (d3.event.button === 0) {
-        let { ymin, ymax } = this.state.yBounds;
-        ymin *= multiplier;
-        ymax *= multiplier;
-        this.setState({ yBounds: { ymin, ymax } });
-      }
-    });
     return g;
   };
   drawXAxes(svg, parent, height) {
     let xAx = null;
-    const { x, y } = this.getD3Scales();
-    const { xAxis } = this.getD3Axes(x, y);
+    const { t, y } = this.getD3Scales();
+    const { xAxis } = this.getD3Axes();
     const { xAxisLabel, yAxisLabel } = this.props;
     { // Position x axis
       xAx = parent.append('g').call(xAxis);
-      svg.attr('height', height);
+      svg.attr('height', height)
+         .style('min-height', height);
       if (this.props.xAxisOrientation === 'top') {
         xAx.attr('transform', `translate(${0}, ${0})`);
       }
       if (this.props.xAxisOrientation === 'bottom') {
         xAx.attr('transform', `translate(${0}, ${height})`);
-        d3.select(this.svg).attr('height', height + 50);
+        d3.select(this.svg).attr('height', height + 50)
+                           .style('min-height', height + 50);
       }
     }
     { // position x axis label
@@ -221,8 +220,8 @@ export class SignalPlot extends Component {
     return xAx;
   }
   updatePlot() {
-    const { x, y } = this.getD3Scales();
-    const { xAxis, yAxis } = this.getD3Axes(x, y);
+    const { t, y } = this.getD3Scales();
+    const { xAxis, yAxis } = this.getD3Axes();
     const { width } = this.getDimensions();
     const { tmin, tmax } = this.props.tBounds;
     const {
@@ -243,14 +242,14 @@ export class SignalPlot extends Component {
     } = this.plot;
     rect.attr('width', width);
     zeroLine.remove();
-    this.plot.zeroLine = drawZeroLine(g, x, y, tmin, tmax);
+    this.plot.zeroLine = drawZeroLine(g, t, y, tmin, tmax);
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
     channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     if (cursorTick) {
       cursorTick.remove();
     }
     if (this.props.cursorX) {
-      this.plot.cursorTick = drawCursorTick(g, height, x(this.props.cursorX));
+      this.plot.cursorTick = drawCursorTick(g, height, t(this.props.cursorX));
     }
     if (xAx) {
       xAx.remove();
@@ -258,25 +257,32 @@ export class SignalPlot extends Component {
     }
     yAx.call(yAxis);
     sigLine.remove();
-    this.plot.sigLine = drawSignalLine(g, x, y, channel, indexes);
+    this.plot.sigLine = drawSignalLine(g, t, y, channel, indexes);
     secondTicks.remove();
-    this.plot.secondTicks = drawSecondTicks(g, height, x, tmin, tmax);
-    btnPlus.remove();
-    btnMinus.remove();
-    this.plot.btnPlus = this.drawYScaleButton(g, '+', 1.1, width - 25, 20);
-    this.plot.btnMinus = this.drawYScaleButton(g, '-', 0.9, width - 25, height - 10);
+    this.plot.secondTicks = drawSecondTicks(g, height, t, tmin, tmax);
+    if (btnPlus) { btnPlus.remove(); }
+    if (btnMinus) { btnMinus.remove(); }
+    if (this.props.onPlus) {
+      this.plot.btnPlus = this.drawYScaleButton(g, '+', width - 25, 20);
+      this.plot.btnPlus.on('mousedown', () => this.props.onPlus(d3.event));
+    }
+    if (this.props.onMinus) {
+      this.plot.btnMinus = this.drawYScaleButton(g, '-', width - 25, height - 10);
+      this.plot.btnMinus.on('mousedown', () => this.props.onMinus(d3.event));
+    }
   }
   renderPlot() {
-    const { channel } = this.props;
+    const { channel, yAxisWidth } = this.props;
     const { tmin, tmax } = this.props.tBounds;
-    const { x, y } = this.getD3Scales();
-    const { xAxis, yAxis } = this.getD3Axes(x, y);
+    const { t, y } = this.getD3Scales();
+    const { xAxis, yAxis } = this.getD3Axes();
     const { width, height } = this.getDimensions();
     // Create new plot shapes in d3
     const svg = d3.select(this.svg)
-                  .attr('height', height);
+                  .attr('height', height)
+                  .style('min-height', height);
     const g = svg.append('g')
-                 .attr('transform', `translate(${30}, ${0})`)
+                 .attr('transform', `translate(${yAxisWidth || 60}, ${0})`)
                  .attr('width', width);
     const rect = g.append('rect')
                   .attr('width', width);
@@ -298,20 +304,27 @@ export class SignalPlot extends Component {
     }
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
     channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
-    const sigLine = drawSignalLine(g, x, y, channel, indexes);
+    const sigLine = drawSignalLine(g, t, y, channel, indexes);
     let cursorTick = null;
     if (this.props.cursorX) {
-      cursorTick = drawCursorTick(g, height, x(this.props.cursorX));
+      cursorTick = drawCursorTick(g, height, t(this.props.cursorX));
     }
-    const secondTicks = drawSecondTicks(g, height, x, tmin, tmax);
-    const zeroLine = drawZeroLine(g, x, y, tmin, tmax);
+    const secondTicks = drawSecondTicks(g, height, t, tmin, tmax);
+    const zeroLine = drawZeroLine(g, t, y, tmin, tmax);
     let xAx = null;
     if (this.props.drawXAxis) {
       xAx = this.drawXAxes(svg, g, height);
     }
-
-    const btnPlus = this.drawYScaleButton(g, '+', 1.1, width - 25, 20);
-    const btnMinus = this.drawYScaleButton(g, '-', 0.9, width - 25, height - 10);
+    let btnPlus;
+    if (this.props.onPlus) {
+      btnPlus = this.drawYScaleButton(g, '+', width - 25, 20);
+      btnPlus.on('mousedown', () => this.props.onPlus(d3.event));
+    }
+    let btnMinus;
+    if (this.props.onMinus) {
+      btnMinus = this.drawYScaleButton(g, '-', width - 25, height - 10);
+      btnMinus.on('mousedown', () => this.props.onMinus(d3.event));
+    }
     this.plot = {
       svg,
       g,

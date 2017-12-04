@@ -1,7 +1,7 @@
 export const LOW_PASS_FILTERS = [
   {
     key: 'none',
-    label: 'No Filter'
+    label: 'No Low Pass Filter'
   },
   {
     key: 'lopass15',
@@ -24,7 +24,7 @@ export const LOW_PASS_FILTERS = [
 export const HIGH_PASS_FILTERS = [
   {
     key: 'none',
-    label: 'No Filter'
+    label: 'No High Pass Filter'
   },
   {
     key: 'hipass0_5',
