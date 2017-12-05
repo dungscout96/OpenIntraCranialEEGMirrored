@@ -40,24 +40,76 @@ function makeRegions(numRegions) {
   return regions;
 }
 
+const BRAIN_MOCK = {
+  type: 'inner',
+  label: 'Brain',
+  value: [
+    {
+      type: 'inner',
+      label: 'Left Hemisphere',
+      value: [
+        { type: 'leaf', label: 'Lobe 1', value: makeRegions(NUM_REGIONS) },
+        { type: 'leaf', label: 'Lobe 2', value: makeRegions(NUM_REGIONS) },
+        { type: 'leaf', label: 'Lobe 3', value: makeRegions(NUM_REGIONS) },
+      ],
+    },
+    {
+      type: 'inner',
+      label: 'Right Hemisphere',
+      value: [
+        { type: 'leaf', label: 'Lobe 4', value: makeRegions(NUM_REGIONS) },
+        { type: 'leaf', label: 'Lobe 5', value: makeRegions(NUM_REGIONS) },
+        { type: 'leaf', label: 'Lobe 6', value: makeRegions(NUM_REGIONS) } ,
+      ],
+    }
+  ]
+};
+
+const getLeafRegions = (node) => {
+  switch(node.type) {
+    case 'inner':
+      return node.value.map(getLeafRegions).reduce((list, next) => list.concat(next));
+    case 'leaf':
+      return node.value;
+  }
+  return [];
+};
+
 class RegionSelect extends Component {
   constructor(props) {
     super(props);
     this.defaultProps = {
-      hemispheres: [],
-      selected: []
+      brain: [],
+      selected: [],
+    };
+    this.state = {
+      activePage: props.brain,
+      pageStack: []
     };
   }
   render() {
-    const regionElement = (region, selected, onclick) => {
+    const clickPage = (node) => {
+      const lastPage = this.state.activePage;
+      const { pageStack } = this.state;
+      pageStack.push(lastPage);
+      this.setState({ activePage: node, pageStack });
+    };
+    const back = () => {
+      const activePage = this.state.pageStack.pop();
+      this.setState({
+        activePage,
+        pageStack: this.state.pageStack
+      });
+    };
+    const renderRegionElement = (region, selected, onclick) => {
       const c = region.colorCode;
       return (
         <li
           key={region.name}
-          className={`region-item ${selected ? 'selected-region' : 'unselected-region'}`}
+          className={`region-select-item ${selected ? 'selected-region' : 'unselected-region'}`}
           onClick={() => onclick(region)}
-          onMouseEnter={() => { this.props.hoverRegion(region); }}
-          onMouseLeave={() => { this.props.hoverRegion(region); }}
+          onMouseEnter={() => { this.props.hoverRegions([region]); }}
+          onMouseLeave={this.props.onMouseLeave}
         >
           <div
             className="region-color-code"
@@ -68,16 +120,54 @@ class RegionSelect extends Component {
         </li>
       );
     };
-    const regionElements = this.props.regions.map((region) => {
+    const renderRegionSelector = (region) => {
       if (this.props.selected.find(r => r === region)) {
-        return regionElement(region, true, this.props.unselectRegion);
+        return renderRegionElement(region, true, this.props.unselectRegion);
       }
-      return regionElement(region, false, this.props.selectRegion);
-    });
+      return renderRegionElement(region, false, this.props.selectRegion);
+    };
+    const renderInnerNode = (node) => {
+        const regions = getLeafRegions(node);
+        return (
+          <li
+          key={node.label}
+          className="region-select-item"
+          onClick={() => clickPage(node)}
+          onMouseEnter={() => { this.props.hoverRegions(regions); }}
+          onMouseLeave={this.props.onMouseLeave}
+        >
+          {node.label}
+        </li>
+      );
+    };
+    const renderNode = (node) => {
+      if (!node) {
+        return null;
+      }
+      switch(node.type) {
+        case 'inner':
+          return node.value.map(renderInnerNode);
+        case 'leaf':
+          return node.value.map(renderRegionSelector);
+      }
+      return null;
+    };
     return (
       <div className="region-select">
+        <div className="toolbar">
+          <div className="toolbar-layer">
+            <div className="toolbar-buttons">
+              <div
+                className={`round-button${this.state.pageStack.length === 0 ? ' disabled' : ''}`}
+                onClick={back}
+              >
+                Back
+              </div>
+            </div>
+          </div>
+        </div>
         <ul className="region-select-list">
-          {regionElements}
+          {renderNode(this.state.activePage)}
         </ul>
       </div>
     );
@@ -138,7 +228,7 @@ class MRIView extends Component {
           if (this.props.selected.find(r => r === region)) {
             this.meshes[i].forEach(m => { m.material.color.setHex(GREEN); });
           }
-          if (this.props.hoveredRegion === region) {
+          if (this.props.hoveredRegions.includes(region)) {
             this.meshes[i].forEach(m => { m.material.color.setHex(BLUE); });
           }
         }
@@ -342,14 +432,14 @@ class SignalPlots extends Component {
     };
     const enabled = (text, incr) => (
       <div
-        className="signal-plots-button"
+        className="round-button"
         onClick={() => { this.setState({ group: this.state.group + incr }); }}
       >
         {text}
       </div>
     );
     const disabled = text => (
-      <div className="signal-plots-button disabled">
+      <div className="round-button disabled">
         {text}
       </div>
     );
@@ -361,17 +451,17 @@ class SignalPlots extends Component {
     const plotElements = this.generatePlotElements(minPlot, maxPlot);
     return (
       <div className="signal-plots-container">
-        <div className="signal-plots-toolbar">
-          <div className="signal-plots-toolbar-layer">
-            <div className="signal-plots-buttons">
+        <div className="toolbar">
+          <div className="toolbar-layer">
+            <div className="toolbar-buttons">
               {showPrev ? enabled('Previous', -1) : disabled('Previous')}
               {showNext ? enabled('Next', +1) : disabled('Next')}
               {numChannels > 0 ? showingPlots : null}
             </div>
           </div>
-          <div className="signal-plots-toolbar-layer">
+          <div className="toolbar-layer">
             <div
-              className="signal-plots-button"
+              className="round-button"
               onClick={() => { this.setState({ yBounds: {} }); }}
             >
               Reset Y Zoom
@@ -399,10 +489,10 @@ class SignalPlots extends Component {
 export default class EEGBrowser extends Component {
   constructor(props) {
     super(props);
-    const regions = makeRegions(NUM_REGIONS)
     this.state = {
-      regions,
-      selected: [regions[0]],
+      brain: props.brain || BRAIN_MOCK,
+      selected: [BRAIN_MOCK.value[0].value[0].value[0]],
+      hoveredRegions: [],
       expanded: false
     }
   }
@@ -430,20 +520,21 @@ export default class EEGBrowser extends Component {
     );
     const regionSelect = (
       <RegionSelect
-        regions={this.state.regions}
+        brain={this.state.brain}
         selected={this.state.selected}
         unselectRegion={unselectRegion}
         selectRegion={selectRegion}
-        hoverRegion={(region) => { this.setState({ hoveredRegion: region }); }}
-        onMouseLeave={() => { this.setState({ hoveredRegion: null }); }}
+        hoverRegions={(regions) => { this.setState({ hoveredRegions: regions }); }}
+        onMouseLeave={() => { this.setState({ hoveredRegions: [] }); }}
       >
       </RegionSelect>
     );
+    const l = getLeafRegions(this.state.brain);
     const mriView = (
       <MRIView
-        regions={this.state.regions}
+        regions={l}
         selected={this.state.selected}
-        hoveredRegion={this.state.hoveredRegion}
+        hoveredRegions={this.state.hoveredRegions}
         showMRI={!this.state.expanded}
       >
       </MRIView>

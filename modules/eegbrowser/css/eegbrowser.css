@@ -9,13 +9,25 @@
   display: flex;
   flex-direction: row;
 }
+
 .region-select {
   flex: 1;
 }
 
-.region-item {
+.region-select-list {
+  margin-top: 10px;
+  padding: 5px 10px;
+  flex: 1;
+  list-style: none;
+}
+
+.region-select-item {
   cursor: pointer;
   margin: 10px 10px;
+}
+
+.region-select-item:hover {
+  text-decoration: underline;
 }
 
 .region-color-code {
@@ -64,13 +76,13 @@
   flex-direction: column;
 }
 
-.signal-plots-toolbar {
+.toolbar {
   display: -ms-flexbox;
   display: flex;
   flex-direction: column;
 }
 
-.signal-plots-toolbar-layer {
+.toolbar-layer {
   display: -ms-flexbox;
   display: flex;
   flex-direction: row;
@@ -80,14 +92,14 @@
   justify-content: space-between;
 }
 
-.signal-plots-buttons {
+.toolbar-buttons {
   display: -ms-flexbox;
   display: flex;
   flex: 1;
   flex-direction: row;
 }
 
-.signal-plots-button {
+.round-button {
   background-color: #064785;
   color: #fff;
   height: 30px;
@@ -102,6 +114,11 @@
   user-select: none;
 }
 
+.round-button.disabled {
+  background-color: #aaaaaa;
+  cursor: not-allowed;
+}
+
 .signal-plots-filters {
   display: flex;
   flex-direction: row;
@@ -112,15 +129,6 @@
   margin: 0 10px;
 }
 
-.signal-plots-button.disabled {
-  background-color: #aaaaaa;
-  color: #fff;
-  height: 30px;
-  padding: 5px 5px;
-  margin: 0 15px;
-  border-radius: 5px;
-  cursor: not-allowed;
-}
 
 .signal-plots-group-number {
   padding: 5px 5px;
