@@ -4,8 +4,8 @@ import MRILoader from './MRILoader';
 import { LOW_PASS_FILTERS, HIGH_PASS_FILTERS, FILTERS } from './Filters';
 
 const NUM_REGIONS = 8;
-const POINTS_PER_REGION = 30;
-const SAMPLES_PER_POINT = 500;
+const POINTS_PER_REGION = 5;
+const SAMPLES_PER_POINT = 200*60;
 
 
 class Region {
@@ -292,9 +292,9 @@ class SignalPlots extends Component {
     this.lastMouseX = null;
     this.drawn = [];
     this.state = {
-      cursorX: null,
+      cursorT: null,
       group: 0,
-      tBounds: { tmin: -0.1, tmax: 25 },
+      tBounds: { tmin: -0.1, tmax: 20 },
       yBounds: {},
       filters: { low: 'none', hi: 'none' }
     };
@@ -359,7 +359,7 @@ class SignalPlots extends Component {
               onPlus={(e) => { e.stopPropagation(); zoom(e.button === 0, 0.9); }}
               onMinus={(e) => { e.stopPropagation(); zoom(e.button === 0, 1.1); }}
               backgroundColor={index % 2 === 0 ? '#fff' : '#eee'}
-              cursorX={this.state.cursorX}
+              cursorT={this.state.cursorT}
               drawXAxis={axisProps.drawXAxis}
               xAxisOrientation={axisProps.xAxisOrientation}
               xAxisLabel={axisProps.xAxisLabel}
@@ -385,10 +385,10 @@ class SignalPlots extends Component {
     }
     const onWheel = (dy) => {
       const { tmin, tmax } = this.state.tBounds;
-      if (tmax - tmin <= 5 && dy < 0) {
+      if (tmax - tmin <= 0.5 && dy < 0) {
         return;
       }
-      if (tmax - tmin >= 65 && dy > 0) {
+      if (tmax - tmin >= 25 && dy > 0) {
         return;
       }
       this.setState({
@@ -420,7 +420,7 @@ class SignalPlots extends Component {
                        .domain([Y_WIDTH, width - Y_WIDTH / 4])
                        .range([tmin, tmax]);
         if (x - left > Y_WIDTH) {
-          this.setState({ cursorX: tInv(x - left) });
+          this.setState({ cursorT: tInv(x - left) });
         }
       }
     };
@@ -530,7 +530,8 @@ export default class EEGBrowser extends Component {
       </RegionSelect>
     );
     const l = getLeafRegions(this.state.brain);
-    const mriView = (
+    const mriView = (''
+    /*
       <MRIView
         regions={l}
         selected={this.state.selected}
@@ -538,6 +539,7 @@ export default class EEGBrowser extends Component {
         showMRI={!this.state.expanded}
       >
       </MRIView>
+    */
     );
     return (
       <div className="eeg-browser">

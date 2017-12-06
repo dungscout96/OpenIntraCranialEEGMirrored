@@ -42,31 +42,31 @@ export class Channel {
   }
 }
 
-const drawSignalLine = (g, tScale, yScale, channel, indexes) => {
-  const signalLine = d3.svg.line()
-                       .x(i => tScale(channel.domain[i] || 0))
-                       .y(i => yScale(channel.signal[i] || 0));
-  return g.append('path')
-          .attr('fill', 'none')
-          .attr('stroke', 'steelblue')
-          .attr('stroke-linejoin', 'round')
-          .attr('stroke-linecap', 'round')
-          .attr('stroke-width', 1.5)
-          .attr('d', signalLine(indexes));
+const drawSignalLine = (ctx, tScale, yScale, channel, indexes) => {
+  const startx = tScale(channel.domain[indexes[0]]);
+  const starty = yScale(channel.signal[indexes[0]]);
+  ctx.strokeStyle = '#00a1ff';
+  ctx.lineWidth = 2;
+  ctx.moveTo(startx, starty);
+  ctx.beginPath();
+  indexes.forEach((i) => {
+    const [ x, y ] = [ tScale(channel.domain[i]), yScale(channel.signal[i]) ];
+    ctx.lineTo(x, y);
+  });
+  ctx.stroke();
 };
 
-const drawSecondTicks = (g, height, tScale, tmin, tmax) => {
+const drawSecondTicks = (ctx, height, tScale, tmin, tmax) => {
   const ctmin = Math.ceil(tmin);
   const ctmax = Math.ceil(tmax);
-  const secondTicks = g.append('g');
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1;
   for (let t = ctmin; t < ctmax; t++) {
-    secondTicks.append('line')
-               .attr({x1: tScale(t), y1: 0})
-               .attr({x2: tScale(t), y2: height})
-               .attr('stroke-width', 1)
-               .attr('stroke', '#999');
+    ctx.beginPath();
+    ctx.moveTo(tScale(t), 0);
+    ctx.lineTo(tScale(t), height);
+    ctx.stroke();
   }
-  return secondTicks;
 };
 
 const drawCursorTick = (g, height, x) => {
@@ -101,7 +101,10 @@ export class SignalPlot extends Component {
   getDimensions() {
     const { width, height } = this.props;
     if (!width) {
-      return { width: this.svg.getBoundingClientRect().width - this.props.yAxisWidth || 60, height };
+      return {
+        width: this.svg.getBoundingClientRect().width - (this.props.yAxisWidth || 60),
+        height
+      };
     }
     return { width, height }
   }
@@ -142,23 +145,23 @@ export class SignalPlot extends Component {
     return { xAxis, yAxis };
   }
   getSignalIndexes() {
-    const { channel, cursorX } = this.props;
+    const { channel, cursorT } = this.props;
     const { tmin, tmax } = this.props.tBounds;
     const { t } = this.getD3Scales();
     let cursTime = 'NA';
     let cursVal = 'NA';
-    if (cursorX) {
-      cursTime = Math.round(cursorX * 100) / 100;
+    if (cursorT) {
+      cursTime = Math.round(cursorT * 100) / 100;
     }
     const ts = channel.domain;
     // Only filter out array indices where time values in the domain are in bounds.
     const indexFilter = (indexes, t, i) => {
       if (t >= tmin && t <= tmax) {
         indexes.push(i)
-        if (i < ts.length - 1 && cursTime >= t && cursTime < ts[i + 1]) {
+        if (i < ts.length - 1 && cursorT >= t && cursorT < ts[i + 1]) {
           const v1 = channel.signal[i];
           const v2 = channel.signal[i + 1];
-          const s = (cursTime - ts[i]) / (ts[i+1] - ts[i]);
+          const s = (cursorT - ts[i]) / (ts[i+1] - ts[i]);
           cursVal = v1 * (1 - s) + v2 * s
           cursVal = Math.round(cursVal * 100) / 100
         }
@@ -192,22 +195,21 @@ export class SignalPlot extends Component {
      .text(symbol);
     return g;
   };
-  drawXAxes(svg, parent, height) {
+  drawXAxes(svg, parent) {
     let xAx = null;
     const { t, y } = this.getD3Scales();
+    const { height } = this.getDimensions();
     const { xAxis } = this.getD3Axes();
     const { xAxisLabel, yAxisLabel } = this.props;
     { // Position x axis
       xAx = parent.append('g').call(xAxis);
-      svg.attr('height', height)
-         .style('min-height', height);
       if (this.props.xAxisOrientation === 'top') {
         xAx.attr('transform', `translate(${0}, ${0})`);
       }
       if (this.props.xAxisOrientation === 'bottom') {
         xAx.attr('transform', `translate(${0}, ${height})`);
-        d3.select(this.svg).attr('height', height + 50)
-                           .style('min-height', height + 50);
+        svg.attr('height', height + 50)
+           .style('height', `${height + 50}px`)
       }
     }
     { // position x axis label
@@ -234,34 +236,53 @@ export class SignalPlot extends Component {
     const { channel } = this.props;
     const { t, y } = this.getD3Scales();
     const { xAxis, yAxis } = this.getD3Axes();
-    const { width } = this.getDimensions();
     const { tmin, tmax } = this.props.tBounds;
     const { ymin, ymax } = this.props.yBounds;
-    const { svg, g, height } = this.plot;
-    this.plot.rect.attr('width', width);
-    this.plot.midLine.remove();
-    this.plot.midLine = drawMidLine(g, t, y, (ymax + ymin) / 2, tmin, tmax);
+    const { width, height } = this.getDimensions();
+    const { div, svg, g } = this.plot;
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
     this.plot.channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     if (this.plot.cursorTick) {
       this.plot.cursorTick.remove();
+      this.plot.cursorTick = null;
     }
-    if (this.props.cursorX) {
-      this.plot.cursorTick = drawCursorTick(g, height, t(this.props.cursorX));
+    if (this.props.cursorT) {
+      const cursorX = t(this.props.cursorT);
+      if (cursorX > 0) {
+        this.plot.cursorTick = drawCursorTick(g, height, t(this.props.cursorT));
+      }
     }
     if (this.plot.xAx) {
       this.plot.xAx.remove();
-      this.plot.xAx = this.drawXAxes(svg, g, height);
+      this.plot.xAx = null;
+    }
+    div.style('height', `${height}px`);
+    svg.attr('height', height)
+       .style('min-height', `${height}px`)
+    if (this.props.drawXAxis) {
+      this.plot.xAx = this.drawXAxes(svg, g);
     }
     this.plot.yAx.call(yAxis);
     this.plot.regionColorCode.remove();
     this.plot.regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode)
-    this.plot.sigLine.remove();
-    this.plot.sigLine = drawSignalLine(g, t, y, channel, indexes);
-    this.plot.secondTicks.remove();
-    this.plot.secondTicks = drawSecondTicks(g, height, t, tmin, tmax);
-    if (this.plot.btnPlus) { this.plot.btnPlus.remove(); }
-    if (this.plot.btnMinus) { this.plot.btnMinus.remove(); }
+    this.plot.canvas.attr('width', width);
+    this.plot.ctx.clearRect(0, 0, width, height);
+    if (this.props.backgroundColor) {
+      this.plot.ctx.fillStyle = this.props.backgroundColor;
+      this.plot.ctx.fillRect(0, 0, width, height);
+    }
+    drawSignalLine(this.plot.ctx, t, y, channel, indexes);
+    drawSecondTicks(this.plot.ctx, height, t, tmin, tmax);
+    this.plot.midLine.remove();
+    this.plot.midLine = drawMidLine(g, t, y, (ymax + ymin) / 2, tmin, tmax);
+    if (this.plot.btnPlus) {
+      this.plot.btnPlus.remove();
+      this.plot.btnPlus = null;
+    }
+    if (this.plot.btnMinus) {
+      this.plot.btnMinus.remove();
+      this.plot.btnMinus = null;
+    }
     if (this.props.onPlus) {
       this.plot.btnPlus = this.drawYScaleButton(g, '+', width - 25, 20);
       this.plot.btnPlus.on('mousedown', () => this.props.onPlus(d3.event));
@@ -279,37 +300,49 @@ export class SignalPlot extends Component {
     const { xAxis, yAxis } = this.getD3Axes();
     const { width, height } = this.getDimensions();
     // Create new plot shapes in d3
+    const div = d3.select(this.div)
+                  .style('height', `${height}px`);;
     const svg = d3.select(this.svg)
                   .attr('height', height)
-                  .style('min-height', height);
-    const g = svg.append('g')
-                 .attr('transform', `translate(${yAxisWidth || 60}, ${0})`)
-                 .attr('width', width);
-    const rect = g.append('rect')
-                  .attr('width', width);
+                  .style('min-height', `${height}px`)
+                  .style('position', 'relative')
+                  .style('top', `${-height}px`);
+    let g = svg.append('g')
+               .attr('transform', `translate(${yAxisWidth || 60}, ${0})`)
+               .attr('width', width);
+    const canvas = d3.select(this.canvas)
+                     .attr('x', yAxisWidth || 60)
+                     .attr('y', 0)
+                     .attr('width', width)
+                     .attr('height', height)
+                     .style('position', 'relative')
+                     .style('left', `${yAxisWidth || 60}px`)
+    const ctx = canvas.node().getContext('2d');
+    if (this.props.backgroundColor) {
+      ctx.fillStyle = this.props.backgroundColor;
+      ctx.fillRect(0, 0, width, height);
+    }
     const yAx = g.append('g')
                  .call(yAxis);
     const regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode);
     const channelName = g.append('text')
                        .attr('x', 5)
                        .attr('y', height - 6)
-                       .attr('font-size', 13)
-    rect.attr('height', height);
-    if (this.props.backgroundColor) {
-      rect.attr('fill', this.props.backgroundColor);
-    }
+                       .attr('font-size', 13);
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
     channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
-    const sigLine = drawSignalLine(g, t, y, channel, indexes);
-    let cursorTick = null;
-    if (this.props.cursorX) {
-      cursorTick = drawCursorTick(g, height, t(this.props.cursorX));
-    }
-    const secondTicks = drawSecondTicks(g, height, t, tmin, tmax);
+    drawSignalLine(ctx, t, y, channel, indexes);
+    drawSecondTicks(ctx, height, t, tmin, tmax);
     const midLine = drawMidLine(g, t, y, (ymax + ymin) / 2, tmin, tmax);
+    let cursorTick = null;
+    if (this.props.cursorT) {
+      cursorTick = drawCursorTick(g, height, t(this.props.cursorT));
+    }
     let xAx = null;
+    svg.attr('height', height)
+       .style('min-height', `${height}px`)
     if (this.props.drawXAxis) {
-      xAx = this.drawXAxes(svg, g, height);
+      xAx = this.drawXAxes(svg, g);
     }
     let btnPlus;
     if (this.props.onPlus) {
@@ -322,18 +355,18 @@ export class SignalPlot extends Component {
       btnMinus.on('mousedown', () => this.props.onMinus(d3.event));
     }
     this.plot = {
+      div,
       svg,
       g,
-      rect,
       xAx,
       yAx,
       height,
       regionColorCode,
       channel,
       channelName,
-      sigLine,
+      canvas,
+      ctx,
       cursorTick,
-      secondTicks,
       midLine,
       btnPlus,
       btnMinus
@@ -341,11 +374,14 @@ export class SignalPlot extends Component {
   }
   render() {
     return (
-      <svg
-        className="signal-plot-item"
-        ref={(svg) => { this.svg = svg; }}
-      >
-      </svg>
+      <div ref={(div) => { this.div = div; }}>
+        <canvas ref={(canvas) => { this.canvas = canvas; }}></canvas>
+        <svg
+          className="signal-plot-item"
+          ref={(svg) => { this.svg = svg; }}
+        >
+        </svg>
+     </div>
     );
   }
 }
