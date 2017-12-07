@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
 import { SignalPlot, Channel } from './SignalPlot';
 import MRILoader from './MRILoader';
+import Panel from '../../../jsx/Panel';
+
 import { LOW_PASS_FILTERS, HIGH_PASS_FILTERS, FILTERS } from './Filters';
 
 const NUM_REGIONS = 8;
@@ -174,6 +176,121 @@ class RegionSelect extends Component {
   }
 }
 
+class SelectionFilters extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tags: {}
+    };
+  }
+  render() {
+    const addTag = (key, value, label, optionLabel) => {
+      const { tags } = this.state;
+      const newTag = { value, label, optionLabel };
+      if (tags[key]) {
+        if (!(tags[key].find(tag => tag.value === value))) {
+          tags[key].push(newTag)
+        }
+      } else {
+        tags[key] = [newTag];
+      }
+      this.setState({ tags });
+    };
+    const setDropdown = (k, v) => { this.setState({ [k]: v }); };
+    const dropdownProps = (userInputCallback, props) => {
+      const onUserInput = (k, v) => userInputCallback(k, v, props.label, props.options[v]);
+      return Object.assign({ onUserInput }, props);
+    };
+    const removeTag = (tagKey, tag) => {
+      const { tags } = this.state;
+      if (tags[tagKey]) {
+        tags[tagKey] = tags[tagKey].filter(t => t.value !== tag.value);
+      }
+      this.setState({ tags });
+    };
+    const tagRemover = (tagKey, tag) => (
+      <span className='tag-remove-button' onClick={() => removeTag(tagKey, tag)}>x</span>
+    );
+    const tagElements = [];
+    Object.keys(this.state.tags).forEach((key) => {
+      const tags = this.state.tags[key];
+      const tagElems = tags.map(tag => (
+        <span key={tag.optionLabel} className="selection-filter-tag">
+          {tag.label}: {tag.optionLabel} {tagRemover(key, tag)}
+        </span>
+      ));
+      tagElements.push(...tagElems);
+    });
+    const regionTagRemover = (region) => (
+      <span className='tag-remove-button' onClick={() => this.props.onRemoveRegion(region)}>
+        x
+      </span>
+    );
+    const regionTagElements = this.props.selectedRegions.map((region) => (
+      <span key={region.name} className="selection-filter-tag">
+        {region.name} {regionTagRemover(region)}
+      </span>
+    ));
+    const formElements = {
+      center: dropdownProps(addTag, {
+        type: 'select',
+        name: 'center',
+        label: 'Center',
+        options: {
+          'M': 'MNI',
+          'N': 'CHUM',
+          'G': 'CHUGA'
+        },
+      }),
+      electrodeType: dropdownProps(addTag, {
+        type: 'select',
+        name: 'electrodeType',
+        label: 'Electrode Type',
+        options: {
+          'D': 'Dixi sEEG',
+          'M': 'Custom-built MNI sEEG',
+          'A': ' Ad-Tech depth',
+          'G': 'Ad-Tech subdural grid/strip'
+        }
+      }),
+      notRepeatedContacts: dropdownProps(setDropdown, {
+        type: 'select',
+        name: 'notRepeatedContacts',
+        value: this.state.notRepeatedContacts,
+        label: 'Non-Repeated Contacts',
+        options: {
+          'nonrepeated': 'Show not repeated contacts'
+        }
+      }),
+      oneContactPerPatientPerRegion: dropdownProps(setDropdown, {
+        type: 'select',
+        name: 'oneContactPerPatientPerRegion',
+        value: this.state.oneContactPerPatientPerRegion,
+        label: 'One Contact Per Patient Per Region',
+        options: {
+          'onepppr': 'Show one contact per patient per region'
+        },
+      })
+    };
+    return (
+      <Panel title="Channel Selection Filters">
+        <FormElement
+          name="selectionFilters"
+          columns={2}
+          formElements={formElements}
+        >
+        </FormElement>
+        <div className="selection-filter-tags">
+          Filter Tags: {tagElements}
+        </div>
+        <div className="selection-filter-tags">
+          Region Tags: {regionTagElements}
+        </div>
+      </Panel>
+    );
+  }
+}
+
 const YELLOW = 0xFF6628;
 const GREEN = 0x34A853;
 const BLUE = 0x4285F4;
@@ -255,7 +372,7 @@ class MRIView extends Component {
   }
 }
 
-class FilterSelect extends Component {
+class SignalFilterSelect extends Component {
   constructor(props) {
     super(props);
   }
@@ -306,9 +423,13 @@ class SignalPlots extends Component {
     this.setState({ group : newGroup });
   }
   componentDidMount() {
+    this.resizeUpdate = () => { this.forceUpdate(); };
+    window.addEventListener('resize', this.resizeUpdate);
     // If user mouses up anywhere in the browser window stop translating time interval.
     window.addEventListener('mouseup', () => { this.lastMouseX = null; });
-    window.addEventListener('resize', () => { this.forceUpdate(); });
+  }
+  componentWillUnmount() {
+    window.removeEveEventListener('resize', this.resizeUpdate);
   }
   generatePlotElements(minPlot, maxPlot) {
     const plotElements = [];
@@ -467,8 +588,8 @@ class SignalPlots extends Component {
               Reset Y Zoom
             </div>
             <div className="signal-plots-filters">
-              <FilterSelect filters={LOW_PASS_FILTERS} filter={this.state.filters.low} onChange={selectLow} />
-              <FilterSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
+              <SignalFilterSelect filters={LOW_PASS_FILTERS} filter={this.state.filters.low} onChange={selectLow} />
+              <SignalFilterSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
             </div>
           </div>
         </div>
@@ -530,8 +651,7 @@ export default class EEGBrowser extends Component {
       </RegionSelect>
     );
     const l = getLeafRegions(this.state.brain);
-    const mriView = (''
-    /*
+    const mriView = (
       <MRIView
         regions={l}
         selected={this.state.selected}
@@ -539,17 +659,25 @@ export default class EEGBrowser extends Component {
         showMRI={!this.state.expanded}
       >
       </MRIView>
-    */
     );
     return (
       <div className="eeg-browser">
-        {this.state.expanded ? null : regionSelect}
-        {mriView}
-        {expandBar}
-        <SignalPlots
-          selected={this.state.selected}
-        >
-        </SignalPlots>
+        <div className="eeg-browser-row">
+          <SelectionFilters
+            selectedRegions={this.state.selected}
+            onRemoveRegion={unselectRegion}
+          >
+          </SelectionFilters>
+        </div>
+        <div className="eeg-browser-row">
+          {this.state.expanded ? null : regionSelect}
+          {mriView}
+          {expandBar}
+          <SignalPlots
+            selected={this.state.selected}
+          >
+          </SignalPlots>
+        </div>
       </div>
     );
   }

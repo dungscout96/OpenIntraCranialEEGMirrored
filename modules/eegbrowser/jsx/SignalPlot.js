@@ -102,7 +102,7 @@ export class SignalPlot extends Component {
     const { width, height } = this.props;
     if (!width) {
       return {
-        width: this.svg.getBoundingClientRect().width - (this.props.yAxisWidth || 60),
+        width: this.div.getBoundingClientRect().width - (this.props.yAxisWidth || 60),
         height
       };
     }
@@ -249,7 +249,7 @@ export class SignalPlot extends Component {
     if (this.props.cursorT) {
       const cursorX = t(this.props.cursorT);
       if (cursorX > 0) {
-        this.plot.cursorTick = drawCursorTick(g, height, t(this.props.cursorT));
+        this.plot.cursorTick = drawCursorTick(g, height, cursorX);
       }
     }
     if (this.plot.xAx) {
@@ -265,7 +265,11 @@ export class SignalPlot extends Component {
     this.plot.yAx.call(yAxis);
     this.plot.regionColorCode.remove();
     this.plot.regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode)
-    this.plot.canvas.attr('width', width);
+    { // Fix canvas resolution based on the canvas dom element's style dimensions
+      const { width, height } = this.plot.canvas.node().getBoundingClientRect();
+      this.plot.canvas.attr('width', width)
+                      .attr('height', height);
+    }
     this.plot.ctx.clearRect(0, 0, width, height);
     if (this.props.backgroundColor) {
       this.plot.ctx.fillStyle = this.props.backgroundColor;
@@ -301,7 +305,8 @@ export class SignalPlot extends Component {
     const { width, height } = this.getDimensions();
     // Create new plot shapes in d3
     const div = d3.select(this.div)
-                  .style('height', `${height}px`);;
+                  .style('height', `${height}px`)
+                  .style('width', '100%');
     const svg = d3.select(this.svg)
                   .attr('height', height)
                   .style('min-height', `${height}px`)
@@ -309,7 +314,7 @@ export class SignalPlot extends Component {
                   .style('top', `${-height}px`);
     let g = svg.append('g')
                .attr('transform', `translate(${yAxisWidth || 60}, ${0})`)
-               .attr('width', width);
+               .attr('width', '100%');
     const canvas = d3.select(this.canvas)
                      .attr('x', yAxisWidth || 60)
                      .attr('y', 0)
@@ -317,6 +322,10 @@ export class SignalPlot extends Component {
                      .attr('height', height)
                      .style('position', 'relative')
                      .style('left', `${yAxisWidth || 60}px`)
+                     .style('display', 'flex')
+                     .style('width', '100%')
+                     .style('height', `${height}px`)
+                     .style('margin-right', '0');
     const ctx = canvas.node().getContext('2d');
     if (this.props.backgroundColor) {
       ctx.fillStyle = this.props.backgroundColor;

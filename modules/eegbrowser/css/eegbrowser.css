@@ -1,4 +1,4 @@
-.domain{
+.domain {
   fill: none;
   stroke: black;
   stroke-width: 1.5px;
@@ -7,6 +7,14 @@
 .eeg-browser {
   display: -ms-flexbox;
   display: flex;
+
+  flex-direction: column;
+}
+
+.eeg-browser-row {
+  display: -ms-flexbox;
+  display: flex;
+
   flex-direction: row;
 }
 
@@ -32,9 +40,38 @@
 
 .region-color-code {
   display: inline-block;
+
   width: 10px;
   height: 10px;
   margin-right: 10px;
+}
+
+.panel {
+  width: 100%;
+}
+
+.form-control {
+  max-width: 300px;
+}
+
+.selection-filter-tags {
+  margin: 10px 0;
+  font-weight: bold;
+}
+
+.tag-remove-button {
+  cursor: pointer;
+  margin-left: 5px;
+  padding-left: 5px;
+  border-left: #999 solid 1px
+}
+.selection-filter-tag {
+  display: inline-block;
+  margin: 2px 5px;
+  padding: 5px 10px;
+  color: #fff;
+  background-color: #004881;
+  border-radius: 5px;
 }
 
 .expand-bar {
@@ -59,6 +96,7 @@
 .expand-bar-icon {
   display: -ms-flexbox;
   display: flex;
+
   color: #fff;
 }
 
@@ -79,12 +117,14 @@
 .toolbar {
   display: -ms-flexbox;
   display: flex;
+
   flex-direction: column;
 }
 
 .toolbar-layer {
   display: -ms-flexbox;
   display: flex;
+
   flex-direction: row;
   min-height: 40px;
   max-height: 40px;
@@ -95,6 +135,7 @@
 .toolbar-buttons {
   display: -ms-flexbox;
   display: flex;
+
   flex: 1;
   flex-direction: row;
 }
@@ -120,7 +161,9 @@
 }
 
 .signal-plots-filters {
+  display: -ms-flexbox;
   display: flex;
+
   flex-direction: row;
   justify-content: space-between;
 }
@@ -146,6 +189,7 @@
   flex: 1;
   flex-direction: column;
   overflow-y: scroll;
+  overflow-x: hidden;
   font-size: 0;
   padding-bottom: 30px;
 }
