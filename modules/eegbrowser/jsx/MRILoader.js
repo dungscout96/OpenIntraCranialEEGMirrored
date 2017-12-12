@@ -1,23 +1,49 @@
-import { VERTEX, FRAGMENT } from './Shaders';
+import ShaderManager from './shader/ShaderManager';
+import MRIOverlay from './shader/MRIOverlay';
 
-const MRI_URL = '/eegbrowser/static/samir_mri.mnc'
+const MODEL_URL = '/eegbrowser/static/model_t1w.nii.gz';
+const LABEL_URL = '/eegbrowser/static/labels.nii.gz';
+
 export default class MRILoader {
   constructor(scene) {
     this.scene = scene;
+    this.shaderManager = new ShaderManager();
+    this.colorMapper = new pixpipe.Colormap()
+    this.colorMapper.setStyle('jet')
+    this.colorMapper.buildLut(300)
   }
   initialize() {
-    const textures = [];
-    const sliceMatrixSize = {};
-    const spaceLength = {};
+    const promise =
+      this.loadFromURL(MODEL_URL)
+        .then(() => this.loadFromURL(LABEL_URL))
+        .then(() => {
+          const colorMap = this.colorMapper.createHorizontalLutImage(false).getData();
+          console.log(colorMap);
+          const texture = new THREE.DataTexture(
+            new Uint8Array(colorMap),
+            colorMap.length / 3,
+            1,
+            THREE.RGBFormat
+          );
+          texture.needsUpdate = true;
+          this.shaderManager.setArrayUniform('colorMap', 1, texture);
+          this.shaderManager.setArrayUniform('enableColorMap', 1, 1);
+          this.createMRIPlanes();
+        });
+    return promise;
+  }
+  getShaderManager() {
+    return this.shaderManager;
+  }
+  loadFromURL(url) {
     const url2buf = new pixpipe.UrlToArrayBufferReader();
-    const file2Buff = new pixpipe.FileToArrayBufferReader();
-    url2buf.addInput(MRI_URL);
+    url2buf.addInput(url);
     url2buf.update();
     const self = this;
     return new Promise((resolve) => {
       url2buf.on('ready', function bufferReady() {
         const buffer = this.getOutput();
-        var genericDecoder = new pixpipe.Image3DGenericDecoder();
+        var genericDecoder = new pixpipe.Image3DGenericDecoderAlt();
         //var genericDecoder = new pixpipe.Minc2Decoder();
         genericDecoder.addInput( buffer );
         genericDecoder.update();
@@ -27,115 +53,28 @@ export default class MRILoader {
           return;
         }
         const mniVolume = genericDecoder.getOutput();
-        if (mniVolume) {
-          var mosaicFilter = new pixpipe.Image3DToMosaicFilter();
-
-          // genericDecoder ouputs a pixpipe.MniVolume, which iherit pixpipe.Image3D
-          // making it compatible with pixpipe.Image3DToMosaicFilter
-          mosaicFilter.addInput( mniVolume );
-          // which axis do we want the picture of?
-          var space = "zspace";
-          mosaicFilter.setMetadata( "axis", space);
-
-          // if time series, take it all
-          mosaicFilter.setMetadata("time", -1);
-          // run the filter
-          mosaicFilter.update();
-          if(!mosaicFilter.getNumberOfOutputs()){
-            console.warn("No output for mosaicFilter.");
-            return;
-          }
-          // display the output in multiple canvas if needed
-          var textures = [];
-          for (var nbOut=0; nbOut<mosaicFilter.getNumberOfOutputs(); nbOut++) {
-            var outputMosaic = mosaicFilter.getOutput(nbOut);
-            console.log( outputMosaic );
-            outputMosaic.setMetadata("min", mniVolume.getMetadata("voxel_min"));
-            outputMosaic.setMetadata("max", mniVolume.getMetadata("voxel_max"));
-            var data = outputMosaic.getDataAsUInt8Array();
-            //var data = outputMosaic.getData();
-            var texture = new THREE.DataTexture(
-              data,
-              outputMosaic.getWidth(),
-              outputMosaic.getHeight(),
-              THREE.LuminanceFormat,
-              THREE.UnsignedByteType //THREE.FloatType
-            );
-            texture.needsUpdate = true;
-            textures.push(texture);
-          }
-          sliceMatrixSize.x = mosaicFilter.getMetadata("gridWidth");
-          sliceMatrixSize.y = mosaicFilter.getMetadata("gridHeight");
-          spaceLength.x = mniVolume.getMetadata("xspace").space_length;
-          spaceLength.y = mniVolume.getMetadata("yspace").space_length;
-          spaceLength.z = mniVolume.getMetadata("zspace").space_length;
-          spaceLength.t = mniVolume.getTimeLength();
-          this.textures = textures;
-          this.sliceMatrixSize = sliceMatrixSize;
-          this.spaceLength = spaceLength;
-
-          var diagonal = Math.sqrt(spaceLength.x*spaceLength.x + spaceLength.y*spaceLength.y + spaceLength.z*spaceLength.z) * 2;
-          var scale = Math.min(spaceLength.x, spaceLength.y, spaceLength.z);
-          self.createMRIPlanes({ textures, sliceMatrixSize, spaceLength });
-          resolve({ diagonal, scale })
+        if (!mniVolume) {
+          console.warn("Non-existant output for genericDecoder.");
           return;
         }
-        console.warn("Non-existant output for genericDecoder.");
-        resolve({ diagonal: 1.0, scale: 1.0 });
+        self.shaderManager.addOverlay(new MRIOverlay(url, mniVolume));
+        resolve(self.shaderManager);
       });
-    })
-  }
-  getDimensions() {
-    return ;
-  }
-  getShaderMaterial() {
-    return this.shaderMaterial;
-  }
-  createMRIPlanes(params) {
-    const { textures, sliceMatrixSize, spaceLength } = params;
-    const system = new THREE.Object3D();
-    this.shaderMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        // the textures
-        nbOfTextureUsed: { type: "i", value: textures.length },
-        // the number of slice per row
-        nbSlicePerRow: { type: "f", value: sliceMatrixSize.x },
-        // the number of slice per column
-        nbSlicePerCol: { type: "f", value: sliceMatrixSize.y },
-        // the number of slice in total
-        nbSliceTotal: { type: "f", value: spaceLength.z },
-        // xspace length
-        xspaceLength: { type: "f", value: spaceLength.x },
-        // yspace length
-        yspaceLength: { type: "f", value: spaceLength.y },
-        // zspace length
-        zspaceLength: { type: "f", value: spaceLength.z },
-        // the number of time samples if it's a timeseries
-        timespaceLength: { type: "i", value: spaceLength.t },
-        timeIndex: { type: "i", value: 0 },
-        forcedAlpha: { type: "f", value: 1 },
-        textures: { type: "t", value:  textures },
-        trilinearInterpol: { type: 'b', value: false },
-        curveTexture: { type: "t", value: null },
-        enableCurve: { type: 'b', value: false }
-      },
-      vertexShader: VERTEX,
-      fragmentShader: FRAGMENT,
-      side: THREE.DoubleSide,
-      transparent: true
     });
-    var largestSide = Math.sqrt(spaceLength.x*spaceLength.x + spaceLength.y*spaceLength.y + spaceLength.z*spaceLength.z) * 2;
-    var zPlaneGeometry = new THREE.PlaneBufferGeometry( largestSide, largestSide, 1 );
-    var zPlaneMesh = new THREE.Mesh( zPlaneGeometry, this.shaderMaterial );
-    system.add( zPlaneMesh );
-    var xPlaneGeometry = new THREE.PlaneBufferGeometry( largestSide, largestSide, 1 );
-    var xPlaneMesh = new THREE.Mesh( xPlaneGeometry, this.shaderMaterial );
-    xPlaneMesh.rotation.y = Math.PI / 2;
-    system.add( xPlaneMesh );
-    var zPlaneGeometry = new THREE.PlaneBufferGeometry( largestSide, largestSide, 1 );
-    var zPlaneMesh = new THREE.Mesh( zPlaneGeometry, this.shaderMaterial );
-    zPlaneMesh.rotation.x = Math.PI / 2;
-    system.add(zPlaneMesh);
+  }
+  createMRIPlanes() {
+    const system = new THREE.Object3D();
+    let plane = new THREE.Mesh();
+    this.shaderManager.shadePlane(plane);
+    system.add(plane);
+    plane = new THREE.Mesh();
+    plane.rotation.y = Math.PI / 2;
+    this.shaderManager.shadePlane(plane);
+    system.add(plane);
+    plane = new THREE.Mesh();
+    this.shaderManager.shadePlane(plane);
+    plane.rotation.x = Math.PI / 2;
+    system.add(plane);
     this.scene.add(system);
   }
 }

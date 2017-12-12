@@ -21,9 +21,9 @@ class Region {
   generateChannels(numChannels, center) {
     for (let i = 0; i < numChannels; i += 1) {
       const channel = new Array(3).fill(0).map(() => (2.0 * Math.random() - 1.0) / NUM_REGIONS);
-      channel[0] += center[0]
-      channel[1] += center[1]
-      channel[2] += center[2]
+      channel[0] += center[0];
+      channel[1] += center[1];
+      channel[2] += center[2];
       this.channels.push(new Channel(`${this.name} : channel_${i}`, channel, SAMPLES_PER_POINT));
     }
   }
@@ -118,7 +118,7 @@ class RegionSelect extends Component {
             style={{ 'backgroundColor': `rgb(${c.r}, ${c.g}, ${c.b})` }}
           >
           </div>
-          {region.label + (selected ? '*' : '')}
+          {region.label}
         </li>
       );
     };
@@ -304,14 +304,17 @@ class MRIView extends Component {
     this.canvas.height = height;
     this.addCanvas()
     renderer.setSize(width, height);
-    this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
+    this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 100000);
     this.controls = new THREE.OrbitControls(this.camera, this.canvas);
     this.scene = new THREE.Scene();
     this.mriLoader = new MRILoader(this.scene);
     this.meshes = [];
-    this.mriLoader.initialize().then((dimensions) => {
-      const scale = dimensions.scale / 2;
-      this.camera.position.z = -dimensions.diagonal / 1.7;
+    this.mriLoader.initialize().then(() => {
+      const dimensions = this.mriLoader.getShaderManager().getDimensions();
+      const { x, y, z } = dimensions;
+      const scale = Math.min(x, y, z) / 2;
+      const diagonal = dimensions.length();
+      this.camera.position.z = diagonal;
       this.camera.lookAt(new THREE.Vector3(0, 0, 0));
       const material = new THREE.MeshBasicMaterial({ color: YELLOW });
       const geometry = new THREE.SphereBufferGeometry(scale / (NUM_REGIONS * 10) , 8, 8);

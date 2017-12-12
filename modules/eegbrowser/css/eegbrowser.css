@@ -38,6 +38,10 @@
   text-decoration: underline;
 }
 
+.selected-region {
+  font-weight: bold;
+}
+
 .region-color-code {
   display: inline-block;
 
