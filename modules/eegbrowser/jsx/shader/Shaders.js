@@ -111,7 +111,7 @@ export const FRAGMENT = (nbTextures, numMRIs) => `
     float maxIntensity = -1.0;
     for (int i = 0; i < ${numMRIs}; i++)
     {
-      vec3 voxelPos = swapMat[i] * (w2v[i] * worldCoord).xzy;
+      vec3 voxelPos = swapMat[i] * (w2v[i] * worldCoord).xyz;
       voxelPos = floor(voxelPos);
       float intensity = getIntensityWorldNearest(
         voxelPos,
@@ -149,7 +149,7 @@ export const FRAGMENT = (nbTextures, numMRIs) => `
 
   void main( void )
   {
-    if (outOfBounds(worldCoord.xzy, worldMin, worldMax))
+    if (outOfBounds(worldCoord.xyz, worldMin, worldMax))
     {
       discard;
       return;

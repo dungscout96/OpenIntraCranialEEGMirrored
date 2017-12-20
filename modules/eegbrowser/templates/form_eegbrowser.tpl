@@ -3,5 +3,5 @@
 </div>
 
 <script>
-  ReactDOM.render(EEGBrowser(), document.getElementById('eeg-browser-page'));
+  ReactDOM.render(App(), document.getElementById('eeg-browser-page'));
 </script>

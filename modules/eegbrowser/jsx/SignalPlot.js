@@ -1,47 +1,6 @@
 import React, { Component } from 'react';
 import { FILTERS } from './Filters';
 
-export class Channel {
-  constructor(name, position, timeSamples, tmin = 0, tmax = 60) {
-    this.name = name;
-    this.tmin = tmin;
-    this.tmax = tmax;
-    this.domain = new Float32Array(timeSamples).fill(0);
-    this.domain.forEach((_, i) => {
-      const t = i / timeSamples;
-      this.domain[i] = tmin * (1 - t) + tmax * t;
-    });
-    this.originalSignal = new Float32Array(timeSamples).fill(0);
-    this.originalSignal.forEach((_, i) => {
-      this.originalSignal[i] = 2.0 * Math.random() - 1.0;
-    });
-    this.position = position;
-    this.hovered = false;
-    this.signal = this.originalSignal;
-    this.filters = {};
-  }
-  applyFilter(lowPassFilterName, highPassFilterName) {
-    if (this.filters.low === lowPassFilterName && this.filters.hi === highPassFilterName) {
-      return; // Don't apply filters more than once
-    }
-    const diffFilter = new differenceequationsignal1d.DifferenceEquationSignal1D();
-    diffFilter.enableBackwardSecondPass
-    const doFilterUpdate = (coefficients, input) => {
-      if (coefficients) {
-        diffFilter.setInput(input);
-        diffFilter.setACoefficients(coefficients.a);
-        diffFilter.setBCoefficients(coefficients.b);
-        diffFilter.run() // eventually should be pixpipe's update()
-        this.signal = diffFilter.getOutput();
-        return;
-      }
-      this.signal = input;
-    };
-    doFilterUpdate(FILTERS[lowPassFilterName], this.originalSignal);
-    doFilterUpdate(FILTERS[highPassFilterName], this.signal);
-  }
-}
-
 const drawSignalLine = (ctx, tScale, yScale, channel, indexes) => {
   const startx = tScale(channel.domain[indexes[0]]);
   const starty = yScale(channel.signal[indexes[0]]);
@@ -195,6 +154,19 @@ export class SignalPlot extends Component {
      .text(symbol);
     return g;
   };
+  drawLink(svg, create = true) {
+    if (this.link) {
+      let svgHeight = svg.node().getBoundingClientRect().height;
+      // On plot creation, we dont have the true height yet.
+      if (create && this.props.xAxisOrientation === 'bottom') {
+        svgHeight += 50;
+      }
+      const axisWidth = this.props.yAxisWidth || 60;
+      d3.select(this.link)
+        .style('left', `${axisWidth + 10}px`)
+        .style('top', `${-(svgHeight + 23)}px`);
+    }
+  };
   drawXAxes(svg, parent) {
     let xAx = null;
     const { t, y } = this.getD3Scales();
@@ -241,7 +213,8 @@ export class SignalPlot extends Component {
     const { width, height } = this.getDimensions();
     const { div, svg, g } = this.plot;
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    this.plot.channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
+    this.plot.channelName.text(` | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
+    this.drawLink(svg, false)
     if (this.plot.cursorTick) {
       this.plot.cursorTick.remove();
       this.plot.cursorTick = null;
@@ -334,12 +307,15 @@ export class SignalPlot extends Component {
     const yAx = g.append('g')
                  .call(yAxis);
     const regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode);
+    const self = this;
     const channelName = g.append('text')
-                       .attr('x', 5)
-                       .attr('y', height - 6)
-                       .attr('font-size', 13);
+                         .attr('class', 'channel-link')
+                         .attr('x', 105)
+                         .attr('y', height - 6)
+                         .attr('font-size', 13);
+    this.drawLink(svg);
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    channelName.text(`${channel.name} | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
+    channelName.text(` | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     drawSignalLine(ctx, t, y, channel, indexes);
     drawSecondTicks(ctx, height, t, tmin, tmax);
     const midLine = drawMidLine(g, t, y, (ymax + ymin) / 2, tmin, tmax);
@@ -390,6 +366,13 @@ export class SignalPlot extends Component {
           ref={(svg) => { this.svg = svg; }}
         >
         </svg>
+        <a
+          className="channel-link"
+          href={`eegbrowser/ajax/GetChannel.php?channelname=${this.props.channel.name}`}
+          ref={(link) => { this.link = link; }}
+        >
+          {this.props.channel.name}
+        </a>
      </div>
     );
   }

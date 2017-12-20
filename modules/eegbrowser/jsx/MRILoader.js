@@ -1,8 +1,8 @@
 import ShaderManager from './shader/ShaderManager';
 import MRIOverlay from './shader/MRIOverlay';
 
-const MODEL_URL = '/eegbrowser/static/model_t1w.nii.gz';
-const LABEL_URL = '/eegbrowser/static/labels.nii.gz';
+const MODEL_URL = 'eegbrowser/static/model_mni.nii.gz';
+const LABEL_URL = 'eegbrowser/static/labels_mni.nii.gz';
 
 export default class MRILoader {
   constructor(scene) {
@@ -18,7 +18,6 @@ export default class MRILoader {
         .then(() => this.loadFromURL(LABEL_URL))
         .then(() => {
           const colorMap = this.colorMapper.createHorizontalLutImage(false).getData();
-          console.log(colorMap);
           const texture = new THREE.DataTexture(
             new Uint8Array(colorMap),
             colorMap.length / 3,

@@ -198,6 +198,14 @@
   padding-bottom: 30px;
 }
 
+.channel-link {
+  cursor: pointer;
+  display: inline;
+  font-size: 1.5rem;
+  z-index: 2;
+  position: relative;
+}
+
 .signal-plot-item {
   font-size: 1.3rem;
   width: 100%;

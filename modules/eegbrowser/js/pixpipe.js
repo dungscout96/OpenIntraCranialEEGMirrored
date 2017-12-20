@@ -13581,6 +13581,34 @@ var PixpipeObject = function () {
         return true;
       }
     }
+
+    /**
+    * Get a clone of the _metadata object. Deep copy, no reference in common.
+    */
+
+  }, {
+    key: 'getMetadataClone',
+    value: function getMetadataClone() {
+      if (this.metadataIntegrityCheck()) {
+        return JSON.parse(JSON.stringify(this._metadata));
+      }
+      return null;
+    }
+
+    /**
+    * Get a string containing information about metadata
+    * @return {String} meta to string
+    */
+
+  }, {
+    key: 'metadataToString',
+    value: function metadataToString() {
+      var str = "__metadata__\n";
+      for (var meta in this._metadata) {
+        str += '\t[' + meta + ']\n\t' + JSON.stringify(this._metadata[meta]) + '\n\n';
+      }
+      return str;
+    }
   }], [{
     key: 'TYPE',
     value: function TYPE() {
@@ -14051,7 +14079,7 @@ var Filter = function (_PixpipeObject) {
 */
 
 /**
-* RasterContainer is a common interface for Image2D and Image3D
+* PixpipeContainer is a common interface for Image2D and Image3D
 * (and possibly some other future formats).
 * Should not be used as-is.
 */
@@ -14084,11 +14112,24 @@ var PixpipeContainer = function (_PixpipeObject) {
 }(PixpipeObject); /* END of class PixpipeContainer */
 
 /*
- * Author   Armin Taheri - https://github.com/ArminTaheri
- * License  MIT
- * Link     https://github.com/Pixpipe/pixpipejs
- * Lab      MCIN - Montreal Neurological Institute
+ * Authors   Armin Taheri - https://github.com/ArminTaheri
+ *           Jonathan Lurie - http://me.jonathanlurie.fr
+ * License   MIT
+ * Link      https://github.com/Pixpipe/pixpipejs
+ * Lab       MCIN - Montreal Neurological Institute
  */
+
+/**
+* An object of type Signal1D is a single dimensional signal, most likely
+* by a Float32Array and a sampling frequency. To change the sampling frequency
+* use the method `.setMetadata('samplingFrequency', Number);`, defaut value is 100.
+* We tend to considere this frequency to be in **Hz**, but there is no hardcoded
+* unit and it all depends on the application. This is important to specify this
+* metadata because some processing filters may use it.
+*
+* **Usage**
+* - [examples/urlFileToArrayBuffer.html](../examples/fftSignal1D.html)
+*/
 
 var Signal1D = function (_PixpipeContainer) {
   inherits(Signal1D, _PixpipeContainer);
@@ -14100,14 +14141,31 @@ var Signal1D = function (_PixpipeContainer) {
 
     _this._type = Signal1D.TYPE();
     _this.setMetadata('length', 0);
+    _this.setMetadata('min', +Infinity);
+    _this.setMetadata('max', -Infinity);
+
+    _this.setMetadata('samplingFrequency', 100);
     return _this;
   }
 
   createClass(Signal1D, [{
     key: 'getData',
+
+
+    /**
+    * Get the raw data as a typed array
+    * @return {Float32Array} the data, NOT A COPY
+    */
     value: function getData() {
       return this._data;
     }
+
+    /**
+    * Set the data.
+    * @param {Float32Array} array - the data
+    * @param {Boolean} deepCopy - true: will perform a deep copy of the data array, false: will just associate the pointer
+    */
+
   }, {
     key: 'setData',
     value: function setData(array) {
@@ -14120,23 +14178,92 @@ var Signal1D = function (_PixpipeContainer) {
       }
 
       this.setMetadata('length', array.length);
+      this._computeStatistics();
     }
+
+    /**
+    * Get a clone of this object (data and metadata)
+    * @return {Signal1D} the clone object
+    */
+
   }, {
     key: 'clone',
     value: function clone() {
       var copy = new Signal1D();
+      copy.copyMetadataFrom(this);
+
       if (this._data) {
         copy.setData(this._data, true);
       }
       return copy;
     }
+
+    /**
+    * Clone this object but not its data
+    * (data array is replaced by same type array filled with zeros).
+    * Metadata are copied.
+    * @return {Signal1D} the hollow clone
+    */
+
   }, {
     key: 'hollowClone',
     value: function hollowClone() {
       var copy = new Signal1D();
+      copy.copyMetadataFrom(this);
       var length = this.getMetadata('length');
-      copy.setData(new Float32Array(length).fill(0));
+      copy.setData(new this._data.constructor(length).fill(0));
       return copy;
+    }
+
+    /**
+    * Get a string reprensenting the data
+    * @return {String} the data to string
+    */
+
+  }, {
+    key: 'dataToString',
+    value: function dataToString() {
+      var maxAbstractSize = 10;
+      var abstractSize = Math.min(maxAbstractSize, this._data.length);
+      var shortArray = this._data.slice(0, abstractSize);
+      var str = "__data__\n";
+      str += '\t' + this._data.constructor.name + '[' + this._data.length + '] ';
+      str += shortArray.toString() + ' ' + (this._data.length > maxAbstractSize ? ' ...' : '');
+      return str;
+    }
+
+    /**
+    * Get a string description of this object
+    * @return {String} the description
+    */
+
+  }, {
+    key: 'toString',
+    value: function toString() {
+      var str = this.constructor.name + "\n";
+      str += this.metadataToString();
+      str += this.dataToString();
+      return str;
+    }
+
+    /**
+    * [PRIVATE]
+    * Conpute min-max
+    */
+
+  }, {
+    key: '_computeStatistics',
+    value: function _computeStatistics() {
+      var min = Infinity;
+      var max = -Infinity;
+
+      for (var i = 0; i < this._data.length; i++) {
+        min = Math.min(min, this._data[i]);
+        max = Math.max(max, this._data[i]);
+      }
+
+      this.setMetadata('min', min);
+      this.setMetadata('max', max);
     }
   }], [{
     key: 'TYPE',
@@ -14269,8 +14396,8 @@ var Image2D = function (_PixpipeContainer) {
       var width = this.getMetadata("width");
       var height = this.getMetadata("height");
 
-      cpImg.setData(new Float32Array(this._data), width, height, ncpp);
       cpImg.copyMetadataFrom(this);
+      cpImg.setData(new Float32Array(this._data), width, height, ncpp);
       return cpImg;
     }
 
@@ -16584,10 +16711,6 @@ var Image3DAlt = function (_PixpipeContainer) {
       var j = position.j;
       var k = position.k;
 
-      if (i == 10 && j == 30 && k == 20) {
-        console.log("stop");
-      }
-
       if (i < 0 || j < 0 || k < 0 || time < 0 || i >= dimensions[0].length || j >= dimensions[1].length || k >= dimensions[2].length || dimensions.length > 3 && time >= dimensions[3].length) {
         console.warn("Voxel query is out of bound.");
         return null;
@@ -16648,6 +16771,27 @@ var Image3DAlt = function (_PixpipeContainer) {
     key: 'getDataCopy',
     value: function getDataCopy() {
       return new this._data.constructor(this._data);
+    }
+
+    /**
+    * Get data scaled as a uint8 taking in consideration the actual min-max range of the data
+    * (and not the possible min-max rage allowed by the data type)
+    * Notice: values are rounded
+    * @return {Uint8Array} the scaled data
+    */
+
+  }, {
+    key: 'getDataUint8',
+    value: function getDataUint8() {
+      var data = this._data;
+      var min$$1 = this.getMinValue();
+      var max$$1 = this.getMaxValue();
+      var range = max$$1 - min$$1;
+      var uint8Buff = new Uint8Array(data.length);
+      for (var i = 0; i < uint8Buff.length; i++) {
+        uint8Buff[i] = Math.round((data[i] - min$$1) / range * 256);
+      }
+      return uint8Buff;
     }
 
     /**
@@ -17128,7 +17272,7 @@ var Image3DAlt = function (_PixpipeContainer) {
 
     /**
     * Sample voxels along a segment in a transform coordinates system (world or subject).
-    * This is achieved by converting the transformed coordinates into voxel coordinates,
+    * This is achieved by converting the transformed coordinates into voxel coordinates, 
     * then samples are taken respecting a voxel unit rather than the transform unit so that
     * it is more fine.
     * @param {String} space2voxelTransformName - id of a registered transformation that goes from arbitrary space to voxel space (aka. "*2v")
@@ -17234,12 +17378,12 @@ var Image3DAlt = function (_PixpipeContainer) {
   }, {
     key: 'getTransfoBox',
     value: function getTransfoBox(transformName) {
-      if (!this.hasTransform(transformName)) {
+      if (!this.hasTransform(space2voxelTransformName)) {
         console.warn('The transform ' + transformName + ' is not available.');
         return null;
       }
 
-      var corners = this.getTransfoVolumeCorners(transformName);
+      var corners = this.getTransfoVolumeCorners();
       var min$$1 = {
         x: +Infinity,
         y: +Infinity,
@@ -17290,6 +17434,500 @@ var Image3DAlt = function (_PixpipeContainer) {
 
 
 CoreTypes.addCoreType(Image3DAlt);
+
+/*
+* Author   Jonathan Lurie - http://me.jonathanlurie.fr
+* License  MIT
+* Link      https://github.com/Pixpipe/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* PixpipeContainerMultiData is a generic container very close from PixpipeContainer
+* (from which it inherits). The main diference is that an instance of PixpipeContainerMultiData
+* can contain multiple dataset since the _data property is an Array. This is particularly
+* convenient when storing large arrays of numbers that must be split in multiple collections
+* such as meshes (a typed array for vertices positions, another typed array for grouping as
+* triangle, another one for colors, etc.)
+* The class PixpipeContainerMultiData should not be used as-is and should be iherited
+* by a more specific datastructure.
+*/
+
+var PixpipeContainerMultiData = function (_PixpipeContainer) {
+  inherits(PixpipeContainerMultiData, _PixpipeContainer);
+
+  function PixpipeContainerMultiData() {
+    classCallCheck(this, PixpipeContainerMultiData);
+
+    var _this = possibleConstructorReturn(this, (PixpipeContainerMultiData.__proto__ || Object.getPrototypeOf(PixpipeContainerMultiData)).call(this));
+
+    _this._data = [];
+
+    // the 'dataIndex' metadata provides an indexing to the _data Array.
+    // it is an index to find what kind of sub-dataset is at what index of _data
+    _this.setMetadata("dataIndex", {});
+
+    // This provides a list of Strings that identify all the mandatory dataset
+    // to achieve a certain level of integrity. By default, this list is empty but
+    // as soon as a class inherits from PixpipeContainerMultiData, a list of names
+    // should be mentioned (hardcoded in constructor). This will then allow to 
+    // perform an integrity check.
+    _this.setMetadata("mandatoryDataset", []);
+    return _this;
+  }
+
+  /**
+  * Get a sub-dataset given its name.  
+  * Notice: This gives a pointer, not a copy. Modifying the returns array will affect this object.
+  * @param {String} name - name of the sub-dataset
+  * @return {TypedArray} a pointer to the typed array of the sub-dataset
+  */
+
+
+  createClass(PixpipeContainerMultiData, [{
+    key: "getData",
+    value: function getData(name) {
+      var index = this.getDataIndex(name);
+      if (index !== -1) {
+        return this._data[index];
+      }
+
+      return null;
+    }
+
+    /**
+    * Get a copy of a sub-dataset given its name.  
+    * Notice: This gives a copy of a typed array. Modifying the returns array will NOT affect this object.
+    * @param {String} name - name of the sub-dataset
+    * @return {TypedArray} a copy of the typed array of the sub-dataset
+    */
+
+  }, {
+    key: "getDataCopy",
+    value: function getDataCopy(name) {
+      var data = this.getData(name);
+      if (data) {
+        return new data.constructor(data);
+      }
+
+      return null;
+    }
+
+    /**
+    * Get the index of a sub-dataset within the _data list, giving its name.
+    * @param {String} name - name of the sub-dataset
+    * @return {Number} Index of -1 if non existant 
+    */
+
+  }, {
+    key: "getDataIndex",
+    value: function getDataIndex(name) {
+      var index = -1;
+      var dataIndex = this._metadata.dataIndex;
+
+      if (name in dataIndex) {
+        index = dataIndex[name];
+      }
+      return index;
+    }
+
+    /**
+    * Return wether or not a sub-dataset exists given its name
+    * @param {String} name - name of the sub-dataset
+    * @return {Boolean} true if sub-data exists, false if not
+    */
+
+  }, {
+    key: "doesDataExist",
+    value: function doesDataExist(name) {
+      return this.getDataIndex(name) !== -1;
+    }
+
+    /**
+    * Associate d with the internal sub-dataset by pointer copy (if Object or Array).
+    * A name is necessary so that the internal structure can indentify the sub-dataset,
+    * to process it of to retrieve it.
+    * @param {TypedArray} d - array of data to associate (not a deep copy)
+    * @param {String} name - name to give to thissub-dataset
+    */
+
+  }, {
+    key: "setRawData",
+    value: function setRawData(d, name) {
+      if (!d) {
+        console.warn("Cannot add null as a dataset.");
+        return;
+      }
+
+      var index = this.getDataIndex(name);
+      var dataIndex = this._metadata.dataIndex;
+
+      // if replacing data at a given position
+      if (index !== -1) {
+        this._data[index] = d;
+      } else {
+        index = this._data.length;
+        this._data.push(d);
+        dataIndex[name] = index;
+      }
+    }
+
+    /**
+    * Performs an integrity check of eixisting sub-dataset Vs mandatory sub-dataset
+    * @return {Boolean} true if integrity is ok, false if not
+    */
+
+  }, {
+    key: "checkIntegrity",
+    value: function checkIntegrity() {
+      var isOk = true;
+
+      var mandatoryDataset = this.getMetadata("mandatoryDataset");
+      for (var i = 0; i < mandatoryDataset.length; i++) {
+        var exists = this.doesDataExist(mandatoryDataset[i]);
+        isOk = isOk && exists;
+        if (!exists) {
+          console.warn("The sub-data of name: " + mandatoryDataset[i] + " is missing");
+        }
+      }
+
+      return isOk;
+    }
+
+    /**
+    * Get a deep copy clone of this object. Works for classes that ihnerit from PixpipeContainerMultiData.
+    * Notice: the sub-datasets will possibly be ina different order, but with an index that tracks them properly.
+    * In other word, not the same order but not an issue.
+    * @return {PixpipeContainerMultiData} a clone.
+    */
+
+  }, {
+    key: "clone",
+    value: function clone() {
+      var metadataClone = this.getMetadataClone();
+
+      if (!metadataClone) {
+        console.warn("The metadata object is invalid, cloning is impossible.");
+        return null;
+      }
+
+      var dataIndex = this._metadata.dataIndex;
+      var cloneObject = new this.constructor();
+      cloneObject.setRawMetadata(metadataClone);
+
+      for (var dataName in dataIndex) {
+        cloneObject.setRawData(this.getDataCopy(dataName), dataName);
+      }
+      return cloneObject;
+    }
+  }]);
+  return PixpipeContainerMultiData;
+}(PixpipeContainer); /* END of class PixpipeContainerMultiData */
+
+/*
+* Author   Jonathan Lurie - http://me.jonathanlurie.fr
+* License  MIT
+* Link      https://github.com/Pixpipe/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* A Mesh3D object contains the necessary informations to create a 3D mesh
+* (for example using ThreeJS) and provide a generic datastructure so that it can accept
+* data from arbitrary mesh file format.
+*
+* **Usage**
+* - [examples/fileToMniObj.html](../examples/fileToMniObj.html)
+*/
+
+var Mesh3D = function (_PixpipeContainerMult) {
+  inherits(Mesh3D, _PixpipeContainerMult);
+
+  function Mesh3D() {
+    classCallCheck(this, Mesh3D);
+
+    var _this = possibleConstructorReturn(this, (Mesh3D.__proto__ || Object.getPrototypeOf(Mesh3D)).call(this));
+
+    _this._type = Mesh3D.TYPE();
+
+    // the number of vertices per shapes, 3 for triangles, 4 for quads, etc.
+    _this.setMetadata("verticesPerShapes", 3);
+
+    // if vertex colors are RGB then it's 3, if RGBA, then it's 4
+    _this.setMetadata("componentsPerColor", 4);
+
+    // to build a mesh, we need at least...
+    var mandatoryDataset = _this.getMetadata("mandatoryDataset");
+
+    _this._datasetNames = {
+      vertexPositions: "vertexPositions",
+      polygonFaces: "polygonFaces",
+      polygonNormals: "polygonNormals",
+      vertexColors: "vertexColors"
+
+      // .. a linear array of vertex positions like [x, y, z, x, y, z, ... ]
+    };mandatoryDataset.push(_this._datasetNames.vertexPositions);
+
+    // .. the ordering of vertices using indexes of the "vertexPositions" array.
+    // this is related to the metadata "verticesPerShapes"
+    mandatoryDataset.push(_this._datasetNames.polygonFaces);
+
+    // .. normal vectors (unit) per face as [x, y, z, x, y, z, ... ]
+    mandatoryDataset.push(_this._datasetNames.polygonNormals);
+    return _this;
+  }
+
+  /**
+  * Hardcode the datatype
+  */
+
+
+  createClass(Mesh3D, [{
+    key: 'setVertexPositions',
+
+
+    /**
+    * Set the array of vertex positions
+    * @param {TypedArray} data - array vertex positions (does not perform a deep copy). The size of this array must be a multiple of 3
+    */
+    value: function setVertexPositions(data) {
+      if (data.length % 3 !== 0) {
+        console.warn("The array of vertex positions has a non-multiple-of-three size.");
+        return;
+      }
+      this.setRawData(data, this._datasetNames.vertexPositions);
+    }
+
+    /**
+    * Get all the vertex positions (a pointer to)
+    * @return {TypedArray} the vertex positions
+    */
+
+  }, {
+    key: 'getVertexPositions',
+    value: function getVertexPositions() {
+      return this.getData(this._datasetNames.vertexPositions);
+    }
+
+    /**
+    * Get a copy of the vertex positions
+    * @return {TypedArray} the vertex positions (deep copy)
+    */
+
+  }, {
+    key: 'getVertexPositionCopy',
+    value: function getVertexPositionCopy() {
+      return this.getDataCopy(this._datasetNames.vertexPositions);
+    }
+
+    /**
+    * Set the array of polygon faces
+    * @param {TypedArray} data - array of index of vertex positions index
+    */
+
+  }, {
+    key: 'setPolygonFacesOrder',
+    value: function setPolygonFacesOrder(data) {
+      if (data.length % this.getMetadata("verticesPerShapes") !== 0) {
+        console.warn("The array of vertext positions must have a size that is a multiple of the metadata 'verticesPerShapes'.");
+        return;
+      }
+      this.setRawData(data, this._datasetNames.polygonFaces);
+    }
+
+    /**
+    * Get all polygon faces
+    * @return {TypedArray} the vertex positions
+    */
+
+  }, {
+    key: 'getPolygonFacesOrder',
+    value: function getPolygonFacesOrder() {
+      return this.getData(this._datasetNames.polygonFaces);
+    }
+
+    /**
+    * Get a copy of polygon faces
+    * @return {TypedArray} the vertex positions (deep copy)
+    */
+
+  }, {
+    key: 'getPolygonFacesOrderCopy',
+    value: function getPolygonFacesOrderCopy() {
+      return this.getDataCopy(this._datasetNames.polygonFaces);
+    }
+
+    /**
+    * Set the array of polygon faces normal (unit) vectors
+    * @param {TypedArray} data - array of index of vertex positions index
+    */
+
+  }, {
+    key: 'setPolygonFacesNormals',
+    value: function setPolygonFacesNormals(data) {
+      if (data.length % 3 !== 0) {
+        console.warn("The array of vertext positions must have a size that is a multiple of 3.");
+        return;
+      }
+      this.setRawData(data, this._datasetNames.polygonNormals);
+    }
+
+    /**
+    * Get all polygon faces normal (unit) vectors (a pointer to)
+    * @return {TypedArray} the vertex positions
+    */
+
+  }, {
+    key: 'getPolygonFacesNormals',
+    value: function getPolygonFacesNormals() {
+      return this.getData(this._datasetNames.polygonNormals);
+    }
+
+    /**
+    * Get a copy of polygon faces normal (unit) vectors
+    * @return {TypedArray} the vertex positions (deep copy)
+    */
+
+  }, {
+    key: 'getPolygonFacesNormalsCopy',
+    value: function getPolygonFacesNormalsCopy() {
+      return this.getDataCopy(this._datasetNames.polygonNormals);
+    }
+
+    /**
+    * Set the array of vertex colors
+    * @param {TypedArray} data - array of index of vertex color as [r, g, b, r, g, b, etc.] or [r, b, g, a, etc.]
+    */
+
+  }, {
+    key: 'setVertexColors',
+    value: function setVertexColors(data) {
+      if (data.length % this.getMetadata("componentsPerColor") !== 0) {
+        console.warn("The array of vertext positions must have a size that is a multiple of the metadata 'componentsPerColor'.");
+        return;
+      }
+      this.setRawData(data, this._datasetNames.vertexColors);
+    }
+
+    /**
+    * Get all vertex colors (a pointer to)
+    * @return {TypedArray} the vertex positions
+    */
+
+  }, {
+    key: 'getVertexColors',
+    value: function getVertexColors() {
+      return this.getData(this._datasetNames.vertexColors);
+    }
+
+    /**
+    * Get a copy of vertex colors
+    * @return {TypedArray} the vertex positions (deep copy)
+    */
+
+  }, {
+    key: 'getVertexColorsCopy',
+    value: function getVertexColorsCopy() {
+      return this.getDataCopy(this._datasetNames.vertexColors);
+    }
+
+    /*
+    // if vertex colors are RGB then it's 3, if RGBA, then it's 4
+    this.setMetadata("componentsPerColor", 4);
+    */
+
+    /**
+    * Get the number of vertices per shape (3 for triangle, 4 for quads, etc.)
+    * @return {Number} the number of vertex involved in each shape
+    */
+
+  }, {
+    key: 'getNumberOfVerticesPerShapes',
+    value: function getNumberOfVerticesPerShapes() {
+      return this.getMetadata("verticesPerShapes");
+    }
+
+    /**
+    * Set the number of vertices per shape (3 for triangle, 4 for quads, etc.)
+    * @param {Number} num - the number of vertex involved in each shape
+    */
+
+  }, {
+    key: 'setNumberOfVerticesPerShapes',
+    value: function setNumberOfVerticesPerShapes(num) {
+      if (num < 0) {
+        console.warn("The number of vertice per shapes should be positive.");
+      }
+      this.setMetadata("verticesPerShapes", num);
+    }
+
+    /**
+    * Get the number of components per color: 3 for RGB, 4 for RGBa
+    * @return {Number} number of components per color
+    */
+
+  }, {
+    key: 'getNumberOfComponentsPerColor',
+    value: function getNumberOfComponentsPerColor() {
+      return this.getMetadata("componentsPerColor");
+    }
+
+    /**
+    * Set the number of components per color: 3 for RGB, 4 for RGBa
+    * @param {Number} num - number of components per color
+    */
+
+  }, {
+    key: 'setNumberOfComponentsPerColor',
+    value: function setNumberOfComponentsPerColor(num) {
+      if (num < 0) {
+        console.warn("The number of components per pixel should be positive.");
+      }
+      this.setMetadata("componentsPerColor", num);
+    }
+
+    /**
+    * Get the number of vertices in this mesh3D
+    * @return {Number}
+    */
+
+  }, {
+    key: 'getNumberOfVertices',
+    value: function getNumberOfVertices() {
+      var vertexPos = this.getVertexPositions();
+      if (!vertexPos) {
+        return null;
+      }
+
+      return vertexPos.length / 3;
+    }
+
+    // TODO
+
+  }, {
+    key: 'generateUniformVertexColor',
+    value: function generateUniformVertexColor(colorArray) {}
+
+    // TODO
+
+  }, {
+    key: 'generateFacesNormalsVectors',
+    value: function generateFacesNormalsVectors() {
+      
+    }
+  }], [{
+    key: 'TYPE',
+    value: function TYPE() {
+      return "MESH3D";
+    }
+  }]);
+  return Mesh3D;
+}(PixpipeContainerMultiData); /* END of class PixpipeContainerMultiData */
+
+// register this type as a CoreType
+
+
+CoreTypes.addCoreType(Mesh3D);
 
 /*
 * Author   Jonathan Lurie - http://me.jonathanlurie.fr
@@ -27279,6 +27917,987 @@ assign(pako, deflate_1, inflate_1, constants);
 
 var pako_1 = pako;
 
+function createCommonjsModule$1(fn, module) {
+  return module = { exports: {} }, fn(module, module.exports), module.exports;
+}
+
+var traverse_1 = createCommonjsModule$1(function (module) {
+  var traverse = module.exports = function (obj) {
+    return new Traverse(obj);
+  };
+
+  function Traverse(obj) {
+    this.value = obj;
+  }
+
+  Traverse.prototype.get = function (ps) {
+    var node = this.value;
+    for (var i = 0; i < ps.length; i++) {
+      var key = ps[i];
+      if (!node || !hasOwnProperty.call(node, key)) {
+        node = undefined;
+        break;
+      }
+      node = node[key];
+    }
+    return node;
+  };
+
+  Traverse.prototype.has = function (ps) {
+    var node = this.value;
+    for (var i = 0; i < ps.length; i++) {
+      var key = ps[i];
+      if (!node || !hasOwnProperty.call(node, key)) {
+        return false;
+      }
+      node = node[key];
+    }
+    return true;
+  };
+
+  Traverse.prototype.set = function (ps, value) {
+    var node = this.value;
+    for (var i = 0; i < ps.length - 1; i++) {
+      var key = ps[i];
+      if (!hasOwnProperty.call(node, key)) node[key] = {};
+      node = node[key];
+    }
+    node[ps[i]] = value;
+    return value;
+  };
+
+  Traverse.prototype.map = function (cb) {
+    return walk(this.value, cb, true);
+  };
+
+  Traverse.prototype.forEach = function (cb) {
+    this.value = walk(this.value, cb, false);
+    return this.value;
+  };
+
+  Traverse.prototype.reduce = function (cb, init) {
+    var skip = arguments.length === 1;
+    var acc = skip ? this.value : init;
+    this.forEach(function (x) {
+      if (!this.isRoot || !skip) {
+        acc = cb.call(this, acc, x);
+      }
+    });
+    return acc;
+  };
+
+  Traverse.prototype.paths = function () {
+    var acc = [];
+    this.forEach(function (x) {
+      acc.push(this.path);
+    });
+    return acc;
+  };
+
+  Traverse.prototype.nodes = function () {
+    var acc = [];
+    this.forEach(function (x) {
+      acc.push(this.node);
+    });
+    return acc;
+  };
+
+  Traverse.prototype.clone = function () {
+    var parents = [],
+        nodes = [];
+
+    return function clone(src) {
+      for (var i = 0; i < parents.length; i++) {
+        if (parents[i] === src) {
+          return nodes[i];
+        }
+      }
+
+      if ((typeof src === 'undefined' ? 'undefined' : _typeof(src)) === 'object' && src !== null) {
+        var dst = copy(src);
+
+        parents.push(src);
+        nodes.push(dst);
+
+        forEach(objectKeys(src), function (key) {
+          dst[key] = clone(src[key]);
+        });
+
+        parents.pop();
+        nodes.pop();
+        return dst;
+      } else {
+        return src;
+      }
+    }(this.value);
+  };
+
+  function walk(root, cb, immutable) {
+    var path = [];
+    var parents = [];
+    var alive = true;
+
+    return function walker(node_) {
+      var node = immutable ? copy(node_) : node_;
+      var modifiers = {};
+
+      var keepGoing = true;
+
+      var state = {
+        node: node,
+        node_: node_,
+        path: [].concat(path),
+        parent: parents[parents.length - 1],
+        parents: parents,
+        key: path.slice(-1)[0],
+        isRoot: path.length === 0,
+        level: path.length,
+        circular: null,
+        update: function update(x, stopHere) {
+          if (!state.isRoot) {
+            state.parent.node[state.key] = x;
+          }
+          state.node = x;
+          if (stopHere) keepGoing = false;
+        },
+        'delete': function _delete(stopHere) {
+          delete state.parent.node[state.key];
+          if (stopHere) keepGoing = false;
+        },
+        remove: function remove(stopHere) {
+          if (isArray(state.parent.node)) {
+            state.parent.node.splice(state.key, 1);
+          } else {
+            delete state.parent.node[state.key];
+          }
+          if (stopHere) keepGoing = false;
+        },
+        keys: null,
+        before: function before(f) {
+          modifiers.before = f;
+        },
+        after: function after(f) {
+          modifiers.after = f;
+        },
+        pre: function pre(f) {
+          modifiers.pre = f;
+        },
+        post: function post(f) {
+          modifiers.post = f;
+        },
+        stop: function stop() {
+          alive = false;
+        },
+        block: function block() {
+          keepGoing = false;
+        }
+      };
+
+      if (!alive) return state;
+
+      function updateState() {
+        if (_typeof(state.node) === 'object' && state.node !== null) {
+          if (!state.keys || state.node_ !== state.node) {
+            state.keys = objectKeys(state.node);
+          }
+
+          state.isLeaf = state.keys.length == 0;
+
+          for (var i = 0; i < parents.length; i++) {
+            if (parents[i].node_ === node_) {
+              state.circular = parents[i];
+              break;
+            }
+          }
+        } else {
+          state.isLeaf = true;
+          state.keys = null;
+        }
+
+        state.notLeaf = !state.isLeaf;
+        state.notRoot = !state.isRoot;
+      }
+
+      updateState();
+
+      // use return values to update if defined
+      var ret = cb.call(state, state.node);
+      if (ret !== undefined && state.update) state.update(ret);
+
+      if (modifiers.before) modifiers.before.call(state, state.node);
+
+      if (!keepGoing) return state;
+
+      if (_typeof(state.node) == 'object' && state.node !== null && !state.circular) {
+        parents.push(state);
+
+        updateState();
+
+        forEach(state.keys, function (key, i) {
+          path.push(key);
+
+          if (modifiers.pre) modifiers.pre.call(state, state.node[key], key);
+
+          var child = walker(state.node[key]);
+          if (immutable && hasOwnProperty.call(state.node, key)) {
+            state.node[key] = child.node;
+          }
+
+          child.isLast = i == state.keys.length - 1;
+          child.isFirst = i == 0;
+
+          if (modifiers.post) modifiers.post.call(state, child);
+
+          path.pop();
+        });
+        parents.pop();
+      }
+
+      if (modifiers.after) modifiers.after.call(state, state.node);
+
+      return state;
+    }(root).node;
+  }
+
+  function copy(src) {
+    if ((typeof src === 'undefined' ? 'undefined' : _typeof(src)) === 'object' && src !== null) {
+      var dst;
+
+      if (isArray(src)) {
+        dst = [];
+      } else if (isDate(src)) {
+        dst = new Date(src.getTime ? src.getTime() : src);
+      } else if (isRegExp(src)) {
+        dst = new RegExp(src);
+      } else if (isError(src)) {
+        dst = { message: src.message };
+      } else if (isBoolean(src)) {
+        dst = new Boolean(src);
+      } else if (isNumber(src)) {
+        dst = new Number(src);
+      } else if (isString(src)) {
+        dst = new String(src);
+      } else if (Object.create && Object.getPrototypeOf) {
+        dst = Object.create(Object.getPrototypeOf(src));
+      } else if (src.constructor === Object) {
+        dst = {};
+      } else {
+        var proto = src.constructor && src.constructor.prototype || src.__proto__ || {};
+        var T = function T() {};
+        T.prototype = proto;
+        dst = new T();
+      }
+
+      forEach(objectKeys(src), function (key) {
+        dst[key] = src[key];
+      });
+      return dst;
+    } else return src;
+  }
+
+  var objectKeys = Object.keys || function keys(obj) {
+    var res = [];
+    for (var key in obj) {
+      res.push(key);
+    }return res;
+  };
+
+  function toS(obj) {
+    return Object.prototype.toString.call(obj);
+  }
+  function isDate(obj) {
+    return toS(obj) === '[object Date]';
+  }
+  function isRegExp(obj) {
+    return toS(obj) === '[object RegExp]';
+  }
+  function isError(obj) {
+    return toS(obj) === '[object Error]';
+  }
+  function isBoolean(obj) {
+    return toS(obj) === '[object Boolean]';
+  }
+  function isNumber(obj) {
+    return toS(obj) === '[object Number]';
+  }
+  function isString(obj) {
+    return toS(obj) === '[object String]';
+  }
+
+  var isArray = Array.isArray || function isArray(xs) {
+    return Object.prototype.toString.call(xs) === '[object Array]';
+  };
+
+  var forEach = function forEach(xs, fn) {
+    if (xs.forEach) return xs.forEach(fn);else for (var i = 0; i < xs.length; i++) {
+      fn(xs[i], i, xs);
+    }
+  };
+
+  forEach(objectKeys(Traverse.prototype), function (key) {
+    traverse[key] = function (obj) {
+      var args = [].slice.call(arguments, 1);
+      var t = new Traverse(obj);
+      return t[key].apply(t, args);
+    };
+  });
+
+  var hasOwnProperty = Object.hasOwnProperty || function (obj, key) {
+    return key in obj;
+  };
+});
+
+var asyncGenerator$1 = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function wrap(fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function _await(value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
+var classCallCheck$1 = function classCallCheck$$1(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass$1 = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+/**
+* The CodecUtils class gather some static methods that can be useful while
+* encodeing/decoding data.
+* CodecUtils does not have a constructor, don't try to instanciate it.
+*/
+
+var CodecUtils = function () {
+  function CodecUtils() {
+    classCallCheck$1(this, CodecUtils);
+  }
+
+  createClass$1(CodecUtils, null, [{
+    key: "isPlatformLittleEndian",
+
+    /**
+    * Get whether or not the platform is using little endian.
+    * @return {Boolen } true if the platform is little endian, false if big endian
+    */
+    value: function isPlatformLittleEndian() {
+      var a = new Uint32Array([0x12345678]);
+      var b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+      return b[0] != 0x12;
+    }
+
+    /**
+    * convert an ArrayBuffer into a unicode string (2 bytes for each char)
+    * Note: this method was kindly borrowed from Google Closure Compiler:
+    * https://github.com/google/closure-library/blob/master/closure/goog/crypt/crypt.js
+    * @param {ArrayBuffer} buf - input ArrayBuffer
+    * @return {String} a string compatible with Unicode characters
+    */
+
+  }, {
+    key: "arrayBufferToUnicode",
+    value: function arrayBufferToUnicode(buff) {
+      var buffUint8 = new Uint8Array(buff);
+      var out = [],
+          pos = 0,
+          c = 0;
+
+      while (pos < buffUint8.length) {
+        var c1 = buffUint8[pos++];
+        if (c1 < 128) {
+          out[c++] = String.fromCharCode(c1);
+        } else if (c1 > 191 && c1 < 224) {
+          var c2 = buffUint8[pos++];
+          out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
+        } else if (c1 > 239 && c1 < 365) {
+          // Surrogate Pair
+          var c2 = buffUint8[pos++];
+          var c3 = buffUint8[pos++];
+          var c4 = buffUint8[pos++];
+          var u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) - 0x10000;
+          out[c++] = String.fromCharCode(0xD800 + (u >> 10));
+          out[c++] = String.fromCharCode(0xDC00 + (u & 1023));
+        } else {
+          var c2 = buffUint8[pos++];
+          var c3 = buffUint8[pos++];
+          out[c++] = String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
+        }
+      }
+      return out.join('');
+    }
+  }, {
+    key: "unicodeToArrayBuffer",
+
+    /**
+    * convert a unicode string into an ArrayBuffer
+    * Note that the str is a regular string but it will be encoded with
+    * 2 bytes per char instead of 1 ( ASCII uses 1 byte/char ).
+    * Note: this method was kindly borrowed from Google Closure Compiler:
+    * https://github.com/google/closure-library/blob/master/closure/goog/crypt/crypt.js
+    * @param {String} str - string to encode
+    * @return {ArrayBuffer} the output ArrayBuffer
+    */
+    value: function unicodeToArrayBuffer(str) {
+      var out = [],
+          p = 0;
+      for (var i = 0; i < str.length; i++) {
+        var c = str.charCodeAt(i);
+        if (c < 128) {
+          out[p++] = c;
+        } else if (c < 2048) {
+          out[p++] = c >> 6 | 192;
+          out[p++] = c & 63 | 128;
+        } else if ((c & 0xFC00) == 0xD800 && i + 1 < str.length && (str.charCodeAt(i + 1) & 0xFC00) == 0xDC00) {
+          // Surrogate Pair
+          c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
+          out[p++] = c >> 18 | 240;
+          out[p++] = c >> 12 & 63 | 128;
+          out[p++] = c >> 6 & 63 | 128;
+          out[p++] = c & 63 | 128;
+        } else {
+          out[p++] = c >> 12 | 224;
+          out[p++] = c >> 6 & 63 | 128;
+          out[p++] = c & 63 | 128;
+        }
+      }
+
+      // make a buffer out of the array
+      return new Uint8Array(out).buffer;
+    }
+  }, {
+    key: "arrayBufferToString8",
+
+    /**
+    * Convert an ArrayBuffer into a ASCII string (1 byte for each char)
+    * @param {ArrayBuffer} buf - buffer to convert into ASCII string
+    * @return {String} the output string
+    */
+    value: function arrayBufferToString8(buf) {
+      return String.fromCharCode.apply(null, new Uint8Array(buf));
+    }
+
+    /**
+    * Convert a ASCII string into an ArrayBuffer.
+    * Note that the str is a regular string, it will be encoded with 1 byte per char
+    * @param {String} str - string to encode
+    * @return {ArrayBuffer}
+    */
+
+  }, {
+    key: "string8ToArrayBuffer",
+    value: function string8ToArrayBuffer(str) {
+      var buf = new ArrayBuffer(str.length);
+      var bufView = new Uint8Array(buf);
+      for (var i = 0; i < str.length; i++) {
+        bufView[i] = str.charCodeAt(i);
+      }
+      return buf;
+    }
+
+    /**
+    * Write a ASCII string into a buffer
+    * @param {String} str - a string that contains only ASCII characters
+    * @param {ArrayBuffer} buffer - the buffer where to write the string
+    * @param {Number} byteOffset - the offset to apply, in number of bytes
+    */
+
+  }, {
+    key: "setString8InBuffer",
+    value: function setString8InBuffer(str, buffer) {
+      var byteOffset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+      if (byteOffset < 0) {
+        console.warn("The byte offset cannot be negative.");
+        return;
+      }
+
+      if (!buffer || !(buffer instanceof ArrayBuffer)) {
+        console.warn("The buffer must be a valid ArrayBuffer.");
+        return;
+      }
+
+      if (str.length + byteOffset > buffer.byteLength) {
+        console.warn("The string is too long to be writen in this buffer.");
+        return;
+      }
+
+      var bufView = new Uint8Array(buffer);
+
+      for (var i = 0; i < str.length; i++) {
+        bufView[i + byteOffset] = str.charCodeAt(i);
+      }
+    }
+
+    /**
+    * Extract an ASCII string from an ArrayBuffer
+    * @param {ArrayBuffer} buffer - the buffer
+    * @param {Number} strLength - number of chars in the string we want
+    * @param {Number} byteOffset - the offset in number of bytes
+    * @return {String} the string, or null in case of error
+    */
+
+  }, {
+    key: "getString8FromBuffer",
+    value: function getString8FromBuffer(buffer, strLength) {
+      var byteOffset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+      if (byteOffset < 0) {
+        console.warn("The byte offset cannot be negative.");
+        return null;
+      }
+
+      if (!buffer || !(buffer instanceof ArrayBuffer)) {
+        console.warn("The buffer must be a valid ArrayBuffer.");
+        return null;
+      }
+
+      if (strLength + byteOffset > buffer.byteLength) {
+        console.warn("The string is too long to be writen in this buffer.");
+        return null;
+      }
+
+      return String.fromCharCode.apply(null, new Uint8Array(buffer, byteOffset, strLength));
+    }
+
+    /**
+    * Serializes a JS object into an ArrayBuffer.
+    * This is using a unicode JSON intermediate step.
+    * @param {Object} obj - an object that does not have cyclic structure
+    * @return {ArrayBuffer} the serialized output
+    */
+
+  }, {
+    key: "objectToArrayBuffer",
+    value: function objectToArrayBuffer(obj) {
+      var buff = null;
+      var objCleanClone = CodecUtils.makeSerializeFriendly(obj);
+
+      try {
+        var strObj = JSON.stringify(objCleanClone);
+        buff = CodecUtils.unicodeToArrayBuffer(strObj);
+      } catch (e) {
+        console.warn(e);
+      }
+
+      return buff;
+    }
+
+    /**
+    * Convert an ArrayBuffer into a JS Object. This uses an intermediate unicode JSON string.
+    * Of course, this buffer has to come from a serialized object.
+    * @param {ArrayBuffer} buff - the ArrayBuffer that hides some object
+    * @return {Object} the deserialized object
+    */
+
+  }, {
+    key: "ArrayBufferToObject",
+    value: function ArrayBufferToObject(buff) {
+      var obj = null;
+
+      try {
+        var strObj = CodecUtils.arrayBufferToUnicode(buff);
+        obj = JSON.parse(strObj);
+      } catch (e) {
+        console.warn(e);
+      }
+
+      return obj;
+    }
+
+    /**
+    * Get if wether of not the arg is a typed array
+    * @param {Object} obj - possibly a typed array, or maybe not
+    * @return {Boolean} true if obj is a typed array
+    */
+
+  }, {
+    key: "isTypedArray",
+    value: function isTypedArray(obj) {
+      return obj instanceof Int8Array || obj instanceof Uint8Array || obj instanceof Uint8ClampedArray || obj instanceof Int16Array || obj instanceof Uint16Array || obj instanceof Int32Array || obj instanceof Uint32Array || obj instanceof Float32Array || obj instanceof Float64Array;
+    }
+
+    /**
+    * Merge some ArrayBuffes in a single one
+    * @param {Array} arrayOfBuffers - some ArrayBuffers
+    * @return {ArrayBuffer} the larger merged buffer
+    */
+
+  }, {
+    key: "mergeBuffers",
+    value: function mergeBuffers(arrayOfBuffers) {
+      var totalByteSize = 0;
+
+      for (var i = 0; i < arrayOfBuffers.length; i++) {
+        totalByteSize += arrayOfBuffers[i].byteLength;
+      }
+
+      var concatArray = new Uint8Array(totalByteSize);
+
+      var offset = 0;
+      for (var i = 0; i < arrayOfBuffers.length; i++) {
+        concatArray.set(new Uint8Array(arrayOfBuffers[i]), offset);
+        offset += arrayOfBuffers[i].byteLength;
+      }
+
+      return concatArray.buffer;
+    }
+
+    /**
+    * In a browser, the global object is `window` while in Node, it's `GLOBAL`.
+    * This method return the one that is relevant to the execution context.
+    * @return {Object} the global object
+    */
+
+  }, {
+    key: "getGlobalObject",
+    value: function getGlobalObject() {
+      var constructorHost = null;
+
+      try {
+        constructorHost = window; // in a web browser
+      } catch (e) {
+        try {
+          constructorHost = GLOBAL; // in node
+        } catch (e) {
+          console.warn("You are not in a Javascript environment?? Weird.");
+          return null;
+        }
+      }
+      return constructorHost;
+    }
+
+    /**
+    * Extract a typed array from an arbitrary buffer, with an arbitrary offset
+    * @param {ArrayBuffer} buffer - the buffer from which we extract data
+    * @param {Number} byteOffset - offset from the begining of buffer
+    * @param {Function} arrayType - function object, actually the constructor of the output array
+    * @param {Number} numberOfElements - nb of elem we want to fetch from the buffer
+    * @return {TypedArray} output of type given by arg arrayType - this is a copy, not a view
+    */
+
+  }, {
+    key: "extractTypedArray",
+    value: function extractTypedArray(buffer, byteOffset, arrayType, numberOfElements) {
+      if (!buffer) {
+        console.warn("Input Buffer is null.");
+        return null;
+      }
+
+      if (!(buffer instanceof ArrayBuffer)) {
+        console.warn("Buffer must be of type ArrayBuffer");
+        return null;
+      }
+
+      if (numberOfElements <= 0) {
+        console.warn("The number of elements to fetch must be greater than 0");
+        return null;
+      }
+
+      if (byteOffset < 0) {
+        console.warn("The byte offset must be possitive or 0");
+        return null;
+      }
+
+      if (byteOffset >= buffer.byteLength) {
+        console.warn("The offset cannot be larger than the size of the buffer.");
+        return null;
+      }
+
+      if (arrayType instanceof Function && !("BYTES_PER_ELEMENT" in arrayType)) {
+        console.warn("ArrayType must be a typed array constructor function.");
+        return null;
+      }
+
+      if (arrayType.BYTES_PER_ELEMENT * numberOfElements + byteOffset > buffer.byteLength) {
+        console.warn("The requested number of elements is too large for this buffer");
+        return;
+      }
+
+      var slicedBuff = buffer.slice(byteOffset, byteOffset + numberOfElements * arrayType.BYTES_PER_ELEMENT);
+      return new arrayType(slicedBuff);
+    }
+
+    /**
+    * Get some info about the given TypedArray
+    * @param {TypedArray} typedArray - one of the typed array
+    * @return {Object} in form of {type: String, signed: Boolean, bytesPerElements: Number, byteLength: Number, length: Number}
+    */
+
+  }, {
+    key: "getTypedArrayInfo",
+    value: function getTypedArrayInfo(typedArray) {
+      var type = null;
+      var signed = false;
+
+      if (typedArray instanceof Int8Array) {
+        type = "int";
+        signed = false;
+      } else if (typedArray instanceof Uint8Array) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Uint8ClampedArray) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Int16Array) {
+        type = "int";
+        signed = false;
+      } else if (typedArray instanceof Uint16Array) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Int32Array) {
+        type = "int";
+        signed = false;
+      } else if (typedArray instanceof Uint32Array) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Float32Array) {
+        type = "float";
+        signed = false;
+      } else if (typedArray instanceof Float64Array) {
+        type = "float";
+        signed = false;
+      }
+
+      return {
+        type: type,
+        signed: signed,
+        bytesPerElements: typedArray.BYTES_PER_ELEMENT,
+        byteLength: typedArray.byteLength,
+        length: typedArray.length
+      };
+    }
+
+    /**
+    * Counts the number of typed array obj has as attributes
+    * @param {Object} obj - an Object
+    * @return {Number} the number of typed array
+    */
+
+  }, {
+    key: "howManyTypedArrayAttributes",
+    value: function howManyTypedArrayAttributes(obj) {
+      var typArrCounter = 0;
+      traverse_1(obj).forEach(function (x) {
+        typArrCounter += CodecUtils.isTypedArray(x);
+      });
+      return typArrCounter;
+    }
+
+    /**
+    * Check if the given object contains any circular reference.
+    * (Circular ref are non serilizable easily, we want to spot them)
+    * @param {Object} obj - An object to check
+    * @return {Boolean} true if obj contains circular refm false if not
+    */
+
+  }, {
+    key: "hasCircularReference",
+    value: function hasCircularReference(obj) {
+      var hasCircular = false;
+      traverse_1(obj).forEach(function (x) {
+        if (this.circular) {
+          hasCircular = true;
+        }
+      });
+      return hasCircular;
+    }
+
+    /**
+    * Remove circular dependencies from an object and return a circularRef-free version
+    * of the object (does not change the original obj), of null if no circular ref was found
+    * @param {Object} obj - An object to check
+    * @return {Object} a circular-ref free object copy if any was found, or null if no circ was found
+    */
+
+  }, {
+    key: "removeCircularReference",
+    value: function removeCircularReference(obj) {
+      var hasCircular = false;
+      var noCircRefObj = traverse_1(obj).map(function (x) {
+        if (this.circular) {
+          this.remove();
+          hasCircular = true;
+        }
+      });
+      return hasCircular ? noCircRefObj : null;
+    }
+
+    /**
+    * Clone the object and replace the typed array attributes by regular Arrays.
+    * @param {Object} obj - an object to alter
+    * @return {Object} the clone if ant typed array were changed, or null if was obj didnt contain any typed array.
+    */
+
+  }, {
+    key: "replaceTypedArrayAttributesByArrays",
+    value: function replaceTypedArrayAttributesByArrays(obj) {
+      var hasTypedArray = false;
+
+      var noTypedArrClone = traverse_1(obj).map(function (x) {
+        if (CodecUtils.isTypedArray(x)) {
+          // here, we cannot call .length directly because traverse.map already serialized
+          // typed arrays into regular objects
+          var origSize = Object.keys(x).length;
+          var untypedArray = new Array(origSize);
+
+          for (var i = 0; i < origSize; i++) {
+            untypedArray[i] = x[i];
+          }
+          this.update(untypedArray);
+          hasTypedArray = true;
+        }
+      });
+      return hasTypedArray ? noTypedArrClone : null;
+    }
+
+    /**
+    * Creates a clone, does not alter the original object.
+    * Remove circular dependencies and replace typed arrays by regular arrays.
+    * Both will make the serialization possible and more reliable.
+    * @param {Object} obj - the object to make serialization friendly
+    * @return {Object} a clean clone, or null if nothing was done
+    */
+
+  }, {
+    key: "makeSerializeFriendly",
+    value: function makeSerializeFriendly(obj) {
+      var newObj = obj;
+      var noCircular = CodecUtils.removeCircularReference(newObj);
+
+      if (noCircular) newObj = noCircular;
+
+      var noTypedArr = CodecUtils.replaceTypedArrayAttributesByArrays(newObj);
+
+      if (noTypedArr) newObj = noTypedArr;
+
+      return newObj;
+    }
+  }]);
+  return CodecUtils;
+}(); /* END of class CodecUtils */
+
 /*
 * Author   Jonathan Lurie - http://me.jonathanlurie.fr
 * License  MIT
@@ -27301,6 +28920,8 @@ var pako_1 = pako;
 * Note that in case the file is *gziped*, the checksum is computed on the raw file,
 * not on the *un-gziped* buffer.
 *
+* It happens that a file is not binary but text, then, set the metadata "readAsText" to `true`.
+*
 * **Usage**
 * - [examples/fileToArrayBuffer.html](../examples/fileToArrayBuffer.html)
 */
@@ -27320,6 +28941,10 @@ var FileToArrayBufferReader = function (_Filter) {
 
     // md5 checksum by categories
     _this.setMetadata("checksums", {});
+
+    // By defaut, this reader outputs an ArrayBuffer, but it can output a string
+    // if it's reading a text file and this metadata is set to true
+    _this.setMetadata("readAsText", false);
     return _this;
   }
 
@@ -27346,14 +28971,51 @@ var FileToArrayBufferReader = function (_Filter) {
     value: function _loadFile(category) {
       var that = this;
       var reader = new FileReader();
+      var readAsText = this.getMetadata("readAsText");
 
-      reader.onloadend = function (event) {
+      // callback for reading the file as a text file
+      var onLoadEndTextFile = function onLoadEndTextFile(event) {
+        that.addTimeRecord("startRead");
+        var result = event.target.result;
+
+        // try to read as text, but it's not text.
+        // Maybe it's a gz-compressed text file, so we have to read this file as a
+        // binary and see if once compressed it has a valid text content
+        if (!CodecUtils.isValidString(result)) {
+          reader.onloadend = onLoadEndBinaryFile;
+          reader.readAsArrayBuffer(that._getInput(category));
+          return;
+        }
+
+        var filename = that._getInput(category).name;
+        var basename = filename.split(/[\\/]/).pop();
+        var extension = basename.split('.').pop();
+        var checksum = md5(result);
+        console.log(checksum);
+
+        // few metadata for recognizing files (potentially)
+        that._metadata.filenames[category] = basename;
+        that._metadata.checksums[category] = checksum;
+
+        that.addTimeRecord("endRead");
+        var time = that.getTime("startRead", "endRead");
+        console.log("Reading file took " + time + "ms.");
+
+        that._output[category] = result;
+        that._fileLoadCount();
+      };
+
+      // callback for reading the file as a binary file
+      var onLoadEndBinaryFile = function onLoadEndBinaryFile(event) {
+        that.addTimeRecord("startRead");
+
         var result = event.target.result;
 
         var filename = that._getInput(category).name;
         var basename = filename.split(/[\\/]/).pop();
         var extension = basename.split('.').pop();
         var checksum = md5(result);
+        console.log(checksum);
 
         // few metadata for recognizing files (potentially)
         that._metadata.filenames[category] = basename;
@@ -27365,22 +29027,41 @@ var FileToArrayBufferReader = function (_Filter) {
             result = pako_1.inflate(result).buffer;
             console.log("File was un-gziped successfully");
           } catch (err) {
-            console.log("Pako: " + err + " (this content is not gziped)");
+            console.log("Pako: not a gziped file (" + err + ")");
           }
         }
+
+        // read the content as text (unicode, ASCII compatible)
+        if (readAsText) {
+          var strResult = CodecUtils.arrayBufferToUnicode(result);
+          if (!strResult) {
+            console.warn("The content of this file is not a valid text. It could be read as a binary file if the metadata 'readAsText' is set to false.");
+            return;
+          } else {
+            result = strResult;
+          }
+        }
+
+        that.addTimeRecord("endRead");
+        var time = that.getTime("startRead", "endRead");
+        console.log("Reading file took " + time + "ms.");
 
         that._output[category] = result;
         that._fileLoadCount();
       };
 
-      reader.onerror = function () {
-        this._output[category] = null;
-        that._fileLoadCount();
-        console.warn("error reading file from category " + category);
-        //throw new Error(error_message);
+      reader.onerror = function (e) {
+        console.warn("ERROR");
+        console.warn(e);
       };
 
-      reader.readAsArrayBuffer(this._getInput(category));
+      if (readAsText) {
+        reader.onloadend = onLoadEndTextFile;
+        reader.readAsText(this._getInput(category));
+      } else {
+        reader.onloadend = onLoadEndBinaryFile;
+        reader.readAsArrayBuffer(this._getInput(category));
+      }
     }
 
     /**
@@ -27421,6 +29102,8 @@ var FileToArrayBufferReader = function (_Filter) {
 * Note that in case the file is *gziped*, the checksum is computed on the raw file,
 * not on the *un-gziped* buffer.
 *
+* It happens that a file is not binary but text, then, set the metadata "readAsText" to `true`.
+*
 * **Usage**
 * - [examples/urlFileToArrayBuffer.html](../examples/urlFileToArrayBuffer.html)
 */
@@ -27440,6 +29123,10 @@ var UrlToArrayBufferReader = function (_Filter) {
 
     // md5 checksum by categories
     _this.setMetadata("checksums", {});
+
+    // By defaut, this reader outputs an ArrayBuffer, but it can output a string
+    // if it's reading a text file and this metadata is set to true
+    _this.setMetadata("readAsText", false);
     return _this;
   }
 
@@ -27467,17 +29154,16 @@ var UrlToArrayBufferReader = function (_Filter) {
     key: '_loadUrl',
     value: function _loadUrl(category, url) {
       var that = this;
+      var readAsText = this.getMetadata("readAsText");
 
       var xhr = new XMLHttpRequest();
       xhr.open("GET", url, true);
-      xhr.responseType = "arraybuffer";
 
-      xhr.onload = function (event) {
-        var arrayBuff = xhr.response;
-
+      var onLoadEndBinaryFile = function onLoadEndBinaryFile(event) {
+        var result = event.target.response;
         var basename = url.split(/[\\/]/).pop();
         var extension = basename.split('.').pop();
-        var checksum = md5(arrayBuff);
+        var checksum = md5(result);
 
         // few metadata for recognizing files (potentially)
         that._metadata.filenames[category] = basename;
@@ -27486,15 +29172,60 @@ var UrlToArrayBufferReader = function (_Filter) {
         // trying to un-gzip it with Pako for non pixp files
         if (extension.localeCompare("pixp")) {
           try {
-            arrayBuff = pako_1.inflate(arrayBuff).buffer;
+            result = pako_1.inflate(result).buffer;
             console.log("File was un-gziped successfully");
           } catch (err) {
-            console.log("Pako: " + err + " (this content is not gziped)");
+            console.log("Pako: not a gziped file (" + err + ")");
           }
         }
 
-        that._output[category] = arrayBuff;
+        // read the content as text (unicode, ASCII compatible)
+        if (readAsText) {
+          var strResult = CodecUtils.arrayBufferToUnicode(result);
+          if (strResult && CodecUtils.isValidString(strResult)) {
+            result = strResult;
+          } else {
+            console.warn("The content of this file is not a valid text. It could be read as a binary file if the metadata 'readAsText' is set to false.");
+            return;
+          }
+        }
 
+        that._output[category] = result;
+        that._outputCounter++;
+
+        if (that._outputCounter == that.getNumberOfInputs()) {
+          that.triggerEvent("ready");
+        }
+      };
+
+      var onLoadEndTextFile = function onLoadEndTextFile(event) {
+        console.log("ooooooooo");
+        var result = event.target.response;
+
+        var basename = url.split(/[\\/]/).pop();
+        var extension = basename.split('.').pop();
+        var checksum = md5(result);
+
+        // few metadata for recognizing files (potentially)
+        that._metadata.filenames[category] = basename;
+        that._metadata.checksums[category] = checksum;
+
+        // try to read as text, but it's not text.
+        // Maybe it's a gz-compressed text file, so we have to read this file as a
+        // binary and see if once compressed it has a valid text content
+        if (!CodecUtils.isValidString(result)) {
+          event.target.abort();
+          // xhrBackup is used only when reading as a text is not possible (binary file)
+          // it is then used in case of failure of reading text in the first place
+          var xhrBackup = new XMLHttpRequest();
+          xhrBackup.open("GET", url, true);
+          xhrBackup.responseType = "arraybuffer";
+          xhrBackup.onload = onLoadEndBinaryFile;
+          xhrBackup.send();
+          return;
+        }
+
+        that._output[category] = result;
         that._outputCounter++;
 
         if (that._outputCounter == that.getNumberOfInputs()) {
@@ -27505,6 +29236,15 @@ var UrlToArrayBufferReader = function (_Filter) {
       xhr.error = function () {
         console.log("here go the error");
       };
+
+      if (readAsText) {
+        xhr.responseType = "text";
+        xhr.onload = onLoadEndTextFile;
+        //xhr.onload = blaa;
+      } else {
+        xhr.responseType = "arraybuffer";
+        xhr.onload = onLoadEndBinaryFile;
+      }
 
       xhr.send();
     }
@@ -42184,11 +43924,11 @@ var EegModDecoder = function (_Filter) {
 
 var commonjsGlobal$1 = typeof window !== 'undefined' ? window : typeof global$1 !== 'undefined' ? global$1 : typeof self !== 'undefined' ? self : {};
 
-function createCommonjsModule$1(fn, module) {
+function createCommonjsModule$2(fn, module) {
   return module = { exports: {} }, fn(module, module.exports), module.exports;
 }
 
-var common$2 = createCommonjsModule$1(function (module, exports) {
+var common$2 = createCommonjsModule$2(function (module, exports) {
   'use strict';
 
   var TYPED_OK = typeof Uint8Array !== 'undefined' && typeof Uint16Array !== 'undefined' && typeof Int32Array !== 'undefined';
@@ -49008,3074 +50748,7 @@ function createCommonjsModule$1$1(fn, module) {
   return module = { exports: {} }, fn(module, module.exports), module.exports;
 }
 
-var traverse_1 = createCommonjsModule$1$1(function (module) {
-  var traverse = module.exports = function (obj) {
-    return new Traverse(obj);
-  };
-
-  function Traverse(obj) {
-    this.value = obj;
-  }
-
-  Traverse.prototype.get = function (ps) {
-    var node = this.value;
-    for (var i = 0; i < ps.length; i++) {
-      var key = ps[i];
-      if (!node || !hasOwnProperty.call(node, key)) {
-        node = undefined;
-        break;
-      }
-      node = node[key];
-    }
-    return node;
-  };
-
-  Traverse.prototype.has = function (ps) {
-    var node = this.value;
-    for (var i = 0; i < ps.length; i++) {
-      var key = ps[i];
-      if (!node || !hasOwnProperty.call(node, key)) {
-        return false;
-      }
-      node = node[key];
-    }
-    return true;
-  };
-
-  Traverse.prototype.set = function (ps, value) {
-    var node = this.value;
-    for (var i = 0; i < ps.length - 1; i++) {
-      var key = ps[i];
-      if (!hasOwnProperty.call(node, key)) node[key] = {};
-      node = node[key];
-    }
-    node[ps[i]] = value;
-    return value;
-  };
-
-  Traverse.prototype.map = function (cb) {
-    return walk(this.value, cb, true);
-  };
-
-  Traverse.prototype.forEach = function (cb) {
-    this.value = walk(this.value, cb, false);
-    return this.value;
-  };
-
-  Traverse.prototype.reduce = function (cb, init) {
-    var skip = arguments.length === 1;
-    var acc = skip ? this.value : init;
-    this.forEach(function (x) {
-      if (!this.isRoot || !skip) {
-        acc = cb.call(this, acc, x);
-      }
-    });
-    return acc;
-  };
-
-  Traverse.prototype.paths = function () {
-    var acc = [];
-    this.forEach(function (x) {
-      acc.push(this.path);
-    });
-    return acc;
-  };
-
-  Traverse.prototype.nodes = function () {
-    var acc = [];
-    this.forEach(function (x) {
-      acc.push(this.node);
-    });
-    return acc;
-  };
-
-  Traverse.prototype.clone = function () {
-    var parents = [],
-        nodes = [];
-
-    return function clone(src) {
-      for (var i = 0; i < parents.length; i++) {
-        if (parents[i] === src) {
-          return nodes[i];
-        }
-      }
-
-      if ((typeof src === 'undefined' ? 'undefined' : _typeof(src)) === 'object' && src !== null) {
-        var dst = copy(src);
-
-        parents.push(src);
-        nodes.push(dst);
-
-        forEach(objectKeys(src), function (key) {
-          dst[key] = clone(src[key]);
-        });
-
-        parents.pop();
-        nodes.pop();
-        return dst;
-      } else {
-        return src;
-      }
-    }(this.value);
-  };
-
-  function walk(root, cb, immutable) {
-    var path = [];
-    var parents = [];
-    var alive = true;
-
-    return function walker(node_) {
-      var node = immutable ? copy(node_) : node_;
-      var modifiers = {};
-
-      var keepGoing = true;
-
-      var state = {
-        node: node,
-        node_: node_,
-        path: [].concat(path),
-        parent: parents[parents.length - 1],
-        parents: parents,
-        key: path.slice(-1)[0],
-        isRoot: path.length === 0,
-        level: path.length,
-        circular: null,
-        update: function update(x, stopHere) {
-          if (!state.isRoot) {
-            state.parent.node[state.key] = x;
-          }
-          state.node = x;
-          if (stopHere) keepGoing = false;
-        },
-        'delete': function _delete(stopHere) {
-          delete state.parent.node[state.key];
-          if (stopHere) keepGoing = false;
-        },
-        remove: function remove(stopHere) {
-          if (isArray(state.parent.node)) {
-            state.parent.node.splice(state.key, 1);
-          } else {
-            delete state.parent.node[state.key];
-          }
-          if (stopHere) keepGoing = false;
-        },
-        keys: null,
-        before: function before(f) {
-          modifiers.before = f;
-        },
-        after: function after(f) {
-          modifiers.after = f;
-        },
-        pre: function pre(f) {
-          modifiers.pre = f;
-        },
-        post: function post(f) {
-          modifiers.post = f;
-        },
-        stop: function stop() {
-          alive = false;
-        },
-        block: function block() {
-          keepGoing = false;
-        }
-      };
-
-      if (!alive) return state;
-
-      function updateState() {
-        if (_typeof(state.node) === 'object' && state.node !== null) {
-          if (!state.keys || state.node_ !== state.node) {
-            state.keys = objectKeys(state.node);
-          }
-
-          state.isLeaf = state.keys.length == 0;
-
-          for (var i = 0; i < parents.length; i++) {
-            if (parents[i].node_ === node_) {
-              state.circular = parents[i];
-              break;
-            }
-          }
-        } else {
-          state.isLeaf = true;
-          state.keys = null;
-        }
-
-        state.notLeaf = !state.isLeaf;
-        state.notRoot = !state.isRoot;
-      }
-
-      updateState();
-
-      // use return values to update if defined
-      var ret = cb.call(state, state.node);
-      if (ret !== undefined && state.update) state.update(ret);
-
-      if (modifiers.before) modifiers.before.call(state, state.node);
-
-      if (!keepGoing) return state;
-
-      if (_typeof(state.node) == 'object' && state.node !== null && !state.circular) {
-        parents.push(state);
-
-        updateState();
-
-        forEach(state.keys, function (key, i) {
-          path.push(key);
-
-          if (modifiers.pre) modifiers.pre.call(state, state.node[key], key);
-
-          var child = walker(state.node[key]);
-          if (immutable && hasOwnProperty.call(state.node, key)) {
-            state.node[key] = child.node;
-          }
-
-          child.isLast = i == state.keys.length - 1;
-          child.isFirst = i == 0;
-
-          if (modifiers.post) modifiers.post.call(state, child);
-
-          path.pop();
-        });
-        parents.pop();
-      }
-
-      if (modifiers.after) modifiers.after.call(state, state.node);
-
-      return state;
-    }(root).node;
-  }
-
-  function copy(src) {
-    if ((typeof src === 'undefined' ? 'undefined' : _typeof(src)) === 'object' && src !== null) {
-      var dst;
-
-      if (isArray(src)) {
-        dst = [];
-      } else if (isDate(src)) {
-        dst = new Date(src.getTime ? src.getTime() : src);
-      } else if (isRegExp(src)) {
-        dst = new RegExp(src);
-      } else if (isError(src)) {
-        dst = { message: src.message };
-      } else if (isBoolean(src)) {
-        dst = new Boolean(src);
-      } else if (isNumber(src)) {
-        dst = new Number(src);
-      } else if (isString(src)) {
-        dst = new String(src);
-      } else if (Object.create && Object.getPrototypeOf) {
-        dst = Object.create(Object.getPrototypeOf(src));
-      } else if (src.constructor === Object) {
-        dst = {};
-      } else {
-        var proto = src.constructor && src.constructor.prototype || src.__proto__ || {};
-        var T = function T() {};
-        T.prototype = proto;
-        dst = new T();
-      }
-
-      forEach(objectKeys(src), function (key) {
-        dst[key] = src[key];
-      });
-      return dst;
-    } else return src;
-  }
-
-  var objectKeys = Object.keys || function keys(obj) {
-    var res = [];
-    for (var key in obj) {
-      res.push(key);
-    }return res;
-  };
-
-  function toS(obj) {
-    return Object.prototype.toString.call(obj);
-  }
-  function isDate(obj) {
-    return toS(obj) === '[object Date]';
-  }
-  function isRegExp(obj) {
-    return toS(obj) === '[object RegExp]';
-  }
-  function isError(obj) {
-    return toS(obj) === '[object Error]';
-  }
-  function isBoolean(obj) {
-    return toS(obj) === '[object Boolean]';
-  }
-  function isNumber(obj) {
-    return toS(obj) === '[object Number]';
-  }
-  function isString(obj) {
-    return toS(obj) === '[object String]';
-  }
-
-  var isArray = Array.isArray || function isArray(xs) {
-    return Object.prototype.toString.call(xs) === '[object Array]';
-  };
-
-  var forEach = function forEach(xs, fn) {
-    if (xs.forEach) return xs.forEach(fn);else for (var i = 0; i < xs.length; i++) {
-      fn(xs[i], i, xs);
-    }
-  };
-
-  forEach(objectKeys(Traverse.prototype), function (key) {
-    traverse[key] = function (obj) {
-      var args = [].slice.call(arguments, 1);
-      var t = new Traverse(obj);
-      return t[key].apply(t, args);
-    };
-  });
-
-  var hasOwnProperty = Object.hasOwnProperty || function (obj, key) {
-    return key in obj;
-  };
-});
-
-var asyncGenerator$1 = function () {
-  function AwaitValue(value) {
-    this.value = value;
-  }
-
-  function AsyncGenerator(gen) {
-    var front, back;
-
-    function send(key, arg) {
-      return new Promise(function (resolve, reject) {
-        var request = {
-          key: key,
-          arg: arg,
-          resolve: resolve,
-          reject: reject,
-          next: null
-        };
-
-        if (back) {
-          back = back.next = request;
-        } else {
-          front = back = request;
-          resume(key, arg);
-        }
-      });
-    }
-
-    function resume(key, arg) {
-      try {
-        var result = gen[key](arg);
-        var value = result.value;
-
-        if (value instanceof AwaitValue) {
-          Promise.resolve(value.value).then(function (arg) {
-            resume("next", arg);
-          }, function (arg) {
-            resume("throw", arg);
-          });
-        } else {
-          settle(result.done ? "return" : "normal", result.value);
-        }
-      } catch (err) {
-        settle("throw", err);
-      }
-    }
-
-    function settle(type, value) {
-      switch (type) {
-        case "return":
-          front.resolve({
-            value: value,
-            done: true
-          });
-          break;
-
-        case "throw":
-          front.reject(value);
-          break;
-
-        default:
-          front.resolve({
-            value: value,
-            done: false
-          });
-          break;
-      }
-
-      front = front.next;
-
-      if (front) {
-        resume(front.key, front.arg);
-      } else {
-        back = null;
-      }
-    }
-
-    this._invoke = send;
-
-    if (typeof gen.return !== "function") {
-      this.return = undefined;
-    }
-  }
-
-  if (typeof Symbol === "function" && Symbol.asyncIterator) {
-    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
-      return this;
-    };
-  }
-
-  AsyncGenerator.prototype.next = function (arg) {
-    return this._invoke("next", arg);
-  };
-
-  AsyncGenerator.prototype.throw = function (arg) {
-    return this._invoke("throw", arg);
-  };
-
-  AsyncGenerator.prototype.return = function (arg) {
-    return this._invoke("return", arg);
-  };
-
-  return {
-    wrap: function wrap(fn) {
-      return function () {
-        return new AsyncGenerator(fn.apply(this, arguments));
-      };
-    },
-    await: function _await(value) {
-      return new AwaitValue(value);
-    }
-  };
-}();
-
-var classCallCheck$1 = function classCallCheck$$1(instance, Constructor) {
-  if (!(instance instanceof Constructor)) {
-    throw new TypeError("Cannot call a class as a function");
-  }
-};
-
-var createClass$1 = function () {
-  function defineProperties(target, props) {
-    for (var i = 0; i < props.length; i++) {
-      var descriptor = props[i];
-      descriptor.enumerable = descriptor.enumerable || false;
-      descriptor.configurable = true;
-      if ("value" in descriptor) descriptor.writable = true;
-      Object.defineProperty(target, descriptor.key, descriptor);
-    }
-  }
-
-  return function (Constructor, protoProps, staticProps) {
-    if (protoProps) defineProperties(Constructor.prototype, protoProps);
-    if (staticProps) defineProperties(Constructor, staticProps);
-    return Constructor;
-  };
-}();
-
-/**
-* The CodecUtils class gather some static methods that can be useful while
-* encodeing/decoding data.
-* CodecUtils does not have a constructor, don't try to instanciate it.
-*/
-
-var CodecUtils = function () {
-  function CodecUtils() {
-    classCallCheck$1(this, CodecUtils);
-  }
-
-  createClass$1(CodecUtils, null, [{
-    key: "isPlatformLittleEndian",
-
-    /**
-    * Get whether or not the platform is using little endian.
-    * @return {Boolen } true if the platform is little endian, false if big endian
-    */
-    value: function isPlatformLittleEndian() {
-      var a = new Uint32Array([0x12345678]);
-      var b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
-      return b[0] != 0x12;
-    }
-
-    /**
-    * convert an ArrayBuffer into a unicode string (2 bytes for each char)
-    * Note: this method was kindly borrowed from Google Closure Compiler:
-    * https://github.com/google/closure-library/blob/master/closure/goog/crypt/crypt.js
-    * @param {ArrayBuffer} buf - input ArrayBuffer
-    * @return {String} a string compatible with Unicode characters
-    */
-
-  }, {
-    key: "arrayBufferToUnicode",
-    value: function arrayBufferToUnicode(buff) {
-      var buffUint8 = new Uint8Array(buff);
-      var out = [],
-          pos = 0,
-          c = 0;
-
-      while (pos < buffUint8.length) {
-        var c1 = buffUint8[pos++];
-        if (c1 < 128) {
-          out[c++] = String.fromCharCode(c1);
-        } else if (c1 > 191 && c1 < 224) {
-          var c2 = buffUint8[pos++];
-          out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
-        } else if (c1 > 239 && c1 < 365) {
-          // Surrogate Pair
-          var c2 = buffUint8[pos++];
-          var c3 = buffUint8[pos++];
-          var c4 = buffUint8[pos++];
-          var u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) - 0x10000;
-          out[c++] = String.fromCharCode(0xD800 + (u >> 10));
-          out[c++] = String.fromCharCode(0xDC00 + (u & 1023));
-        } else {
-          var c2 = buffUint8[pos++];
-          var c3 = buffUint8[pos++];
-          out[c++] = String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
-        }
-      }
-      return out.join('');
-    }
-  }, {
-    key: "unicodeToArrayBuffer",
-
-    /**
-    * convert a unicode string into an ArrayBuffer
-    * Note that the str is a regular string but it will be encoded with
-    * 2 bytes per char instead of 1 ( ASCII uses 1 byte/char ).
-    * Note: this method was kindly borrowed from Google Closure Compiler:
-    * https://github.com/google/closure-library/blob/master/closure/goog/crypt/crypt.js
-    * @param {String} str - string to encode
-    * @return {ArrayBuffer} the output ArrayBuffer
-    */
-    value: function unicodeToArrayBuffer(str) {
-      var out = [],
-          p = 0;
-      for (var i = 0; i < str.length; i++) {
-        var c = str.charCodeAt(i);
-        if (c < 128) {
-          out[p++] = c;
-        } else if (c < 2048) {
-          out[p++] = c >> 6 | 192;
-          out[p++] = c & 63 | 128;
-        } else if ((c & 0xFC00) == 0xD800 && i + 1 < str.length && (str.charCodeAt(i + 1) & 0xFC00) == 0xDC00) {
-          // Surrogate Pair
-          c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
-          out[p++] = c >> 18 | 240;
-          out[p++] = c >> 12 & 63 | 128;
-          out[p++] = c >> 6 & 63 | 128;
-          out[p++] = c & 63 | 128;
-        } else {
-          out[p++] = c >> 12 | 224;
-          out[p++] = c >> 6 & 63 | 128;
-          out[p++] = c & 63 | 128;
-        }
-      }
-
-      // make a buffer out of the array
-      return new Uint8Array(out).buffer;
-    }
-  }, {
-    key: "arrayBufferToString8",
-
-    /**
-    * Convert an ArrayBuffer into a ASCII string (1 byte for each char)
-    * @param {ArrayBuffer} buf - buffer to convert into ASCII string
-    * @return {String} the output string
-    */
-    value: function arrayBufferToString8(buf) {
-      return String.fromCharCode.apply(null, new Uint8Array(buf));
-    }
-
-    /**
-    * Convert a ASCII string into an ArrayBuffer.
-    * Note that the str is a regular string, it will be encoded with 1 byte per char
-    * @param {String} str - string to encode
-    * @return {ArrayBuffer}
-    */
-
-  }, {
-    key: "string8ToArrayBuffer",
-    value: function string8ToArrayBuffer(str) {
-      var buf = new ArrayBuffer(str.length);
-      var bufView = new Uint8Array(buf);
-      for (var i = 0; i < str.length; i++) {
-        bufView[i] = str.charCodeAt(i);
-      }
-      return buf;
-    }
-
-    /**
-    * Write a ASCII string into a buffer
-    * @param {String} str - a string that contains only ASCII characters
-    * @param {ArrayBuffer} buffer - the buffer where to write the string
-    * @param {Number} byteOffset - the offset to apply, in number of bytes
-    */
-
-  }, {
-    key: "setString8InBuffer",
-    value: function setString8InBuffer(str, buffer) {
-      var byteOffset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-
-      if (byteOffset < 0) {
-        console.warn("The byte offset cannot be negative.");
-        return;
-      }
-
-      if (!buffer || !(buffer instanceof ArrayBuffer)) {
-        console.warn("The buffer must be a valid ArrayBuffer.");
-        return;
-      }
-
-      if (str.length + byteOffset > buffer.byteLength) {
-        console.warn("The string is too long to be writen in this buffer.");
-        return;
-      }
-
-      var bufView = new Uint8Array(buffer);
-
-      for (var i = 0; i < str.length; i++) {
-        bufView[i + byteOffset] = str.charCodeAt(i);
-      }
-    }
-
-    /**
-    * Extract an ASCII string from an ArrayBuffer
-    * @param {ArrayBuffer} buffer - the buffer
-    * @param {Number} strLength - number of chars in the string we want
-    * @param {Number} byteOffset - the offset in number of bytes
-    * @return {String} the string, or null in case of error
-    */
-
-  }, {
-    key: "getString8FromBuffer",
-    value: function getString8FromBuffer(buffer, strLength) {
-      var byteOffset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
-
-      if (byteOffset < 0) {
-        console.warn("The byte offset cannot be negative.");
-        return null;
-      }
-
-      if (!buffer || !(buffer instanceof ArrayBuffer)) {
-        console.warn("The buffer must be a valid ArrayBuffer.");
-        return null;
-      }
-
-      if (strLength + byteOffset > buffer.byteLength) {
-        console.warn("The string is too long to be writen in this buffer.");
-        return null;
-      }
-
-      return String.fromCharCode.apply(null, new Uint8Array(buffer, byteOffset, strLength));
-    }
-
-    /**
-    * Serializes a JS object into an ArrayBuffer.
-    * This is using a unicode JSON intermediate step.
-    * @param {Object} obj - an object that does not have cyclic structure
-    * @return {ArrayBuffer} the serialized output
-    */
-
-  }, {
-    key: "objectToArrayBuffer",
-    value: function objectToArrayBuffer(obj) {
-      var buff = null;
-      var objCleanClone = CodecUtils.makeSerializeFriendly(obj);
-
-      try {
-        var strObj = JSON.stringify(objCleanClone);
-        buff = CodecUtils.unicodeToArrayBuffer(strObj);
-      } catch (e) {
-        console.warn(e);
-      }
-
-      return buff;
-    }
-
-    /**
-    * Convert an ArrayBuffer into a JS Object. This uses an intermediate unicode JSON string.
-    * Of course, this buffer has to come from a serialized object.
-    * @param {ArrayBuffer} buff - the ArrayBuffer that hides some object
-    * @return {Object} the deserialized object
-    */
-
-  }, {
-    key: "ArrayBufferToObject",
-    value: function ArrayBufferToObject(buff) {
-      var obj = null;
-
-      try {
-        var strObj = CodecUtils.arrayBufferToUnicode(buff);
-        obj = JSON.parse(strObj);
-      } catch (e) {
-        console.warn(e);
-      }
-
-      return obj;
-    }
-
-    /**
-    * Get if wether of not the arg is a typed array
-    * @param {Object} obj - possibly a typed array, or maybe not
-    * @return {Boolean} true if obj is a typed array
-    */
-
-  }, {
-    key: "isTypedArray",
-    value: function isTypedArray(obj) {
-      return obj instanceof Int8Array || obj instanceof Uint8Array || obj instanceof Uint8ClampedArray || obj instanceof Int16Array || obj instanceof Uint16Array || obj instanceof Int32Array || obj instanceof Uint32Array || obj instanceof Float32Array || obj instanceof Float64Array;
-    }
-
-    /**
-    * Merge some ArrayBuffes in a single one
-    * @param {Array} arrayOfBuffers - some ArrayBuffers
-    * @return {ArrayBuffer} the larger merged buffer
-    */
-
-  }, {
-    key: "mergeBuffers",
-    value: function mergeBuffers(arrayOfBuffers) {
-      var totalByteSize = 0;
-
-      for (var i = 0; i < arrayOfBuffers.length; i++) {
-        totalByteSize += arrayOfBuffers[i].byteLength;
-      }
-
-      var concatArray = new Uint8Array(totalByteSize);
-
-      var offset = 0;
-      for (var i = 0; i < arrayOfBuffers.length; i++) {
-        concatArray.set(new Uint8Array(arrayOfBuffers[i]), offset);
-        offset += arrayOfBuffers[i].byteLength;
-      }
-
-      return concatArray.buffer;
-    }
-
-    /**
-    * In a browser, the global object is `window` while in Node, it's `GLOBAL`.
-    * This method return the one that is relevant to the execution context.
-    * @return {Object} the global object
-    */
-
-  }, {
-    key: "getGlobalObject",
-    value: function getGlobalObject() {
-      var constructorHost = null;
-
-      try {
-        constructorHost = window; // in a web browser
-      } catch (e) {
-        try {
-          constructorHost = GLOBAL; // in node
-        } catch (e) {
-          console.warn("You are not in a Javascript environment?? Weird.");
-          return null;
-        }
-      }
-      return constructorHost;
-    }
-
-    /**
-    * Extract a typed array from an arbitrary buffer, with an arbitrary offset
-    * @param {ArrayBuffer} buffer - the buffer from which we extract data
-    * @param {Number} byteOffset - offset from the begining of buffer
-    * @param {Function} arrayType - function object, actually the constructor of the output array
-    * @param {Number} numberOfElements - nb of elem we want to fetch from the buffer
-    * @return {TypedArray} output of type given by arg arrayType - this is a copy, not a view
-    */
-
-  }, {
-    key: "extractTypedArray",
-    value: function extractTypedArray(buffer, byteOffset, arrayType, numberOfElements) {
-      if (!buffer) {
-        console.warn("Input Buffer is null.");
-        return null;
-      }
-
-      if (!(buffer instanceof ArrayBuffer)) {
-        console.warn("Buffer must be of type ArrayBuffer");
-        return null;
-      }
-
-      if (numberOfElements <= 0) {
-        console.warn("The number of elements to fetch must be greater than 0");
-        return null;
-      }
-
-      if (byteOffset < 0) {
-        console.warn("The byte offset must be possitive or 0");
-        return null;
-      }
-
-      if (byteOffset >= buffer.byteLength) {
-        console.warn("The offset cannot be larger than the size of the buffer.");
-        return null;
-      }
-
-      if (arrayType instanceof Function && !("BYTES_PER_ELEMENT" in arrayType)) {
-        console.warn("ArrayType must be a typed array constructor function.");
-        return null;
-      }
-
-      if (arrayType.BYTES_PER_ELEMENT * numberOfElements + byteOffset > buffer.byteLength) {
-        console.warn("The requested number of elements is too large for this buffer");
-        return;
-      }
-
-      var slicedBuff = buffer.slice(byteOffset, byteOffset + numberOfElements * arrayType.BYTES_PER_ELEMENT);
-      return new arrayType(slicedBuff);
-    }
-
-    /**
-    * Get some info about the given TypedArray
-    * @param {TypedArray} typedArray - one of the typed array
-    * @return {Object} in form of {type: String, signed: Boolean, bytesPerElements: Number, byteLength: Number, length: Number}
-    */
-
-  }, {
-    key: "getTypedArrayInfo",
-    value: function getTypedArrayInfo(typedArray) {
-      var type = null;
-      var signed = false;
-
-      if (typedArray instanceof Int8Array) {
-        type = "int";
-        signed = false;
-      } else if (typedArray instanceof Uint8Array) {
-        type = "int";
-        signed = true;
-      } else if (typedArray instanceof Uint8ClampedArray) {
-        type = "int";
-        signed = true;
-      } else if (typedArray instanceof Int16Array) {
-        type = "int";
-        signed = false;
-      } else if (typedArray instanceof Uint16Array) {
-        type = "int";
-        signed = true;
-      } else if (typedArray instanceof Int32Array) {
-        type = "int";
-        signed = false;
-      } else if (typedArray instanceof Uint32Array) {
-        type = "int";
-        signed = true;
-      } else if (typedArray instanceof Float32Array) {
-        type = "float";
-        signed = false;
-      } else if (typedArray instanceof Float64Array) {
-        type = "float";
-        signed = false;
-      }
-
-      return {
-        type: type,
-        signed: signed,
-        bytesPerElements: typedArray.BYTES_PER_ELEMENT,
-        byteLength: typedArray.byteLength,
-        length: typedArray.length
-      };
-    }
-
-    /**
-    * Counts the number of typed array obj has as attributes
-    * @param {Object} obj - an Object
-    * @return {Number} the number of typed array
-    */
-
-  }, {
-    key: "howManyTypedArrayAttributes",
-    value: function howManyTypedArrayAttributes(obj) {
-      var typArrCounter = 0;
-      traverse_1(obj).forEach(function (x) {
-        typArrCounter += CodecUtils.isTypedArray(x);
-      });
-      return typArrCounter;
-    }
-
-    /**
-    * Check if the given object contains any circular reference.
-    * (Circular ref are non serilizable easily, we want to spot them)
-    * @param {Object} obj - An object to check
-    * @return {Boolean} true if obj contains circular refm false if not
-    */
-
-  }, {
-    key: "hasCircularReference",
-    value: function hasCircularReference(obj) {
-      var hasCircular = false;
-      traverse_1(obj).forEach(function (x) {
-        if (this.circular) {
-          hasCircular = true;
-        }
-      });
-      return hasCircular;
-    }
-
-    /**
-    * Remove circular dependencies from an object and return a circularRef-free version
-    * of the object (does not change the original obj), of null if no circular ref was found
-    * @param {Object} obj - An object to check
-    * @return {Object} a circular-ref free object copy if any was found, or null if no circ was found
-    */
-
-  }, {
-    key: "removeCircularReference",
-    value: function removeCircularReference(obj) {
-      var hasCircular = false;
-      var noCircRefObj = traverse_1(obj).map(function (x) {
-        if (this.circular) {
-          this.remove();
-          hasCircular = true;
-        }
-      });
-      return hasCircular ? noCircRefObj : null;
-    }
-
-    /**
-    * Clone the object and replace the typed array attributes by regular Arrays.
-    * @param {Object} obj - an object to alter
-    * @return {Object} the clone if ant typed array were changed, or null if was obj didnt contain any typed array.
-    */
-
-  }, {
-    key: "replaceTypedArrayAttributesByArrays",
-    value: function replaceTypedArrayAttributesByArrays(obj) {
-      var hasTypedArray = false;
-
-      var noTypedArrClone = traverse_1(obj).map(function (x) {
-        if (CodecUtils.isTypedArray(x)) {
-          // here, we cannot call .length directly because traverse.map already serialized
-          // typed arrays into regular objects
-          var origSize = Object.keys(x).length;
-          var untypedArray = new Array(origSize);
-
-          for (var i = 0; i < origSize; i++) {
-            untypedArray[i] = x[i];
-          }
-          this.update(untypedArray);
-          hasTypedArray = true;
-        }
-      });
-      return hasTypedArray ? noTypedArrClone : null;
-    }
-
-    /**
-    * Creates a clone, does not alter the original object.
-    * Remove circular dependencies and replace typed arrays by regular arrays.
-    * Both will make the serialization possible and more reliable.
-    * @param {Object} obj - the object to make serialization friendly
-    * @return {Object} a clean clone, or null if nothing was done
-    */
-
-  }, {
-    key: "makeSerializeFriendly",
-    value: function makeSerializeFriendly(obj) {
-      var newObj = obj;
-      var noCircular = CodecUtils.removeCircularReference(newObj);
-
-      if (noCircular) newObj = noCircular;
-
-      var noTypedArr = CodecUtils.replaceTypedArrayAttributesByArrays(newObj);
-
-      if (noTypedArr) newObj = noTypedArr;
-
-      return newObj;
-    }
-  }]);
-  return CodecUtils;
-}(); /* END of class CodecUtils */
-
-var asyncGenerator$1$1 = function () {
-  function AwaitValue(value) {
-    this.value = value;
-  }
-
-  function AsyncGenerator(gen) {
-    var front, back;
-
-    function send(key, arg) {
-      return new Promise(function (resolve, reject) {
-        var request = {
-          key: key,
-          arg: arg,
-          resolve: resolve,
-          reject: reject,
-          next: null
-        };
-
-        if (back) {
-          back = back.next = request;
-        } else {
-          front = back = request;
-          resume(key, arg);
-        }
-      });
-    }
-
-    function resume(key, arg) {
-      try {
-        var result = gen[key](arg);
-        var value = result.value;
-
-        if (value instanceof AwaitValue) {
-          Promise.resolve(value.value).then(function (arg) {
-            resume("next", arg);
-          }, function (arg) {
-            resume("throw", arg);
-          });
-        } else {
-          settle(result.done ? "return" : "normal", result.value);
-        }
-      } catch (err) {
-        settle("throw", err);
-      }
-    }
-
-    function settle(type, value) {
-      switch (type) {
-        case "return":
-          front.resolve({
-            value: value,
-            done: true
-          });
-          break;
-
-        case "throw":
-          front.reject(value);
-          break;
-
-        default:
-          front.resolve({
-            value: value,
-            done: false
-          });
-          break;
-      }
-
-      front = front.next;
-
-      if (front) {
-        resume(front.key, front.arg);
-      } else {
-        back = null;
-      }
-    }
-
-    this._invoke = send;
-
-    if (typeof gen.return !== "function") {
-      this.return = undefined;
-    }
-  }
-
-  if (typeof Symbol === "function" && Symbol.asyncIterator) {
-    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
-      return this;
-    };
-  }
-
-  AsyncGenerator.prototype.next = function (arg) {
-    return this._invoke("next", arg);
-  };
-
-  AsyncGenerator.prototype.throw = function (arg) {
-    return this._invoke("throw", arg);
-  };
-
-  AsyncGenerator.prototype.return = function (arg) {
-    return this._invoke("return", arg);
-  };
-
-  return {
-    wrap: function wrap(fn) {
-      return function () {
-        return new AsyncGenerator(fn.apply(this, arguments));
-      };
-    },
-    await: function _await(value) {
-      return new AwaitValue(value);
-    }
-  };
-}();
-
-var classCallCheck$1$1 = function classCallCheck$1(instance, Constructor) {
-  if (!(instance instanceof Constructor)) {
-    throw new TypeError("Cannot call a class as a function");
-  }
-};
-
-var createClass$1$1 = function () {
-  function defineProperties(target, props) {
-    for (var i = 0; i < props.length; i++) {
-      var descriptor = props[i];
-      descriptor.enumerable = descriptor.enumerable || false;
-      descriptor.configurable = true;
-      if ("value" in descriptor) descriptor.writable = true;
-      Object.defineProperty(target, descriptor.key, descriptor);
-    }
-  }
-
-  return function (Constructor, protoProps, staticProps) {
-    if (protoProps) defineProperties(Constructor.prototype, protoProps);
-    if (staticProps) defineProperties(Constructor, staticProps);
-    return Constructor;
-  };
-}();
-
-/*
-* Author    Jonathan Lurie - http://me.jonahanlurie.fr
-*
-* License   MIT
-* Link      https://github.com/jonathanlurie/pixpipejs
-* Lab       MCIN - Montreal Neurological Institute
-*/
-
-// list of different kinds of data we accept as input
-var dataCases = {
-  invalid: null, // the data is not compatible (Number, String)
-  typedArray: 1, // the data is compatible, as a typed array
-  mixedArrays: 2, // the data is compatible, as an array of typed array
-  complexObject: 3 // a complex object is also compatible (can be a untyped array)
-};
-
-var PixBlockEncoder = function () {
-  function PixBlockEncoder() {
-    classCallCheck$1$1(this, PixBlockEncoder);
-
-    this._compress = false;
-    this.reset();
-  }
-
-  /**
-  * reset inputs and inputs
-  */
-
-  createClass$1$1(PixBlockEncoder, [{
-    key: 'reset',
-    value: function reset() {
-      this._input = null;
-      this._inputCase = null;
-      this._output = null;
-    }
-
-    /**
-    * Set a boolean to secify if data should be compressed or not
-    * @param {Boolean} b - true to compress, false to not compress
-    */
-
-  }, {
-    key: 'enableDataCompression',
-    value: function enableDataCompression(b) {
-      this._compress = b;
-    }
-
-    /**
-    * Specify an input to the encoder
-    * @param {Object} obj - an object candidate, containing a _data and _metadata attributes
-    */
-
-  }, {
-    key: 'setInput',
-    value: function setInput(obj) {
-      this._inputCase = PixBlockEncoder.isGoodCandidate(obj);
-      if (this._inputCase) {
-        this._input = obj;
-      }
-    }
-
-    /**
-    * Get the output
-    * @return {Object} the output, or null
-    */
-
-  }, {
-    key: 'getOutput',
-    value: function getOutput() {
-      return this._output;
-    }
-
-    /**
-    * Check if the given object is a good intput candidate
-    * @param {Object} obj - an object candidate, containing a _data and _metadata attributes
-    * @return {Boolean} true if good candidate, false if not
-    */
-
-  }, {
-    key: 'run',
-
-    /**
-    * Launch the encoding of the block
-    */
-    value: function run() {
-      var input = this._input;
-
-      if (!input || !this._inputCase) {
-        console.warn("An input must be given to the PixBlockEncoder.");
-        return;
-      }
-
-      var data = input._data;
-      var encodedData = null;
-      var compressedData = null;
-
-      var byteStreamInfo = [];
-      var useMultipleDataStreams = false;
-
-      switch (this._inputCase) {
-
-        // The input is a typed array ********************************
-        case dataCases.typedArray:
-          {
-            // no real need to compress the data here
-            encodedData = data;
-            var byteStreamInfoSubset = this._getDataSubsetInfo(data);
-
-            // additional compression flag
-            byteStreamInfoSubset.compressedByteLength = null;
-
-            if (this._compress) {
-              encodedData = pako_1$1.deflate(encodedData.buffer);
-              byteStreamInfoSubset.compressedByteLength = encodedData.byteLength;
-            }
-
-            byteStreamInfo.push(byteStreamInfoSubset);
-          }
-          break;
-
-        // The input is an Array of typed arrays *********************
-        case dataCases.mixedArrays:
-          {
-            useMultipleDataStreams = true;
-            compressedData = [];
-
-            encodedData = new Array(data.length);
-
-            // collect bytestream info for each subset of data
-            for (var i = 0; i < data.length; i++) {
-              var currentDataStream = data[i];
-              var byteStreamInfoSubset = this._getDataSubsetInfo(currentDataStream);
-
-              // if not a typed array, this subset needs further modifications
-              if (!byteStreamInfoSubset.isTypedArray) {
-                currentDataStream = new Uint8Array(CodecUtils.objectToArrayBuffer(currentDataStream));
-                byteStreamInfoSubset.byteLength = currentDataStream.byteLength;
-              }
-
-              if (this._compress) {
-                var compressedDataSubset = pako_1$1.deflate(currentDataStream.buffer);
-                byteStreamInfoSubset.compressedByteLength = compressedDataSubset.byteLength;
-                compressedData.push(compressedDataSubset);
-              }
-
-              byteStreamInfo.push(byteStreamInfoSubset);
-
-              encodedData[i] = currentDataStream;
-            }
-
-            if (this._compress) {
-              encodedData = compressedData;
-            }
-          }
-          break;
-
-        // The input is an Array of typed arrays *********************
-        case dataCases.complexObject:
-          {
-            var byteStreamInfoSubset = this._getDataSubsetInfo(data);
-
-            // replace the original data object with this uncompressed serialized version.
-            // We wrap it into a Uint8Array so that we can call .buffer on it, just like all the others
-            encodedData = new Uint8Array(CodecUtils.objectToArrayBuffer(data));
-            byteStreamInfoSubset.byteLength = encodedData.byteLength;
-
-            if (this._compress) {
-              encodedData = pako_1$1.deflate(encodedData);
-              byteStreamInfoSubset.compressedByteLength = encodedData.byteLength;
-            }
-
-            byteStreamInfo.push(byteStreamInfoSubset);
-          }
-          break;
-
-        default:
-          console.warn("A problem occured.");
-          return;
-      }
-
-      // the metadata are converted into a buffer
-      var metadataBuffer = CodecUtils.objectToArrayBuffer(input._metadata);
-
-      var pixBlockHeader = {
-        byteStreamInfo: byteStreamInfo,
-        useMultipleDataStreams: useMultipleDataStreams,
-        originalBlockType: input.constructor.name,
-        metadataByteLength: metadataBuffer.byteLength
-
-        // converting the pixBlockHeader obj into a buffer
-      };var pixBlockHeaderBuff = CodecUtils.objectToArrayBuffer(pixBlockHeader);
-
-      // this list will then be transformed into a single buffer
-      var allBuffers = [
-      // primer, part 1: endianess
-      new Uint8Array([+CodecUtils.isPlatformLittleEndian()]).buffer,
-      // primer, part 2: size of the header buff
-      new Uint32Array([pixBlockHeaderBuff.byteLength]).buffer,
-
-      // the header buff
-      pixBlockHeaderBuff,
-
-      // the metadata buffer
-      metadataBuffer];
-
-      // adding the actual encodedData buffer to the list
-      if (useMultipleDataStreams) {
-        for (var i = 0; i < encodedData.length; i++) {
-          allBuffers.push(encodedData[i].buffer);
-        }
-      } else {
-        allBuffers.push(encodedData.buffer);
-      }
-
-      this._output = CodecUtils.mergeBuffers(allBuffers);
-    }
-
-    /**
-    * [STATIC]
-    * Give in what case we fall when we want to use this data.
-    * Cases are described at the top
-    * @param {Whatever} data - a piec of data, object, array, typed array...
-    * @return {Number} the case
-    */
-
-  }, {
-    key: '_getDataSubsetInfo',
-
-    /**
-    * [PRIVATE]
-    * Return some infomation about the data subset so that it's easier to parse later
-    * @param {Object} subset - can be a typedArray or a complex object
-    * @return {Object} reconstruction info about this subset
-    */
-    value: function _getDataSubsetInfo(subset) {
-      var infoObj = null;
-
-      if (CodecUtils.isTypedArray(subset)) {
-        infoObj = CodecUtils.getTypedArrayInfo(subset);
-        infoObj.isTypedArray = true;
-        infoObj.compressedByteLength = null;
-      } else {
-        infoObj = {
-          type: subset.constructor.name,
-          compressedByteLength: null,
-          byteLength: null,
-          length: null,
-          isTypedArray: false
-        };
-      }
-
-      return infoObj;
-    }
-  }], [{
-    key: 'isGoodCandidate',
-    value: function isGoodCandidate(obj) {
-      if (!obj) {
-        console.warn("Input object cannot be null.");
-        return false;
-      }
-
-      if (!("_metadata" in obj)) {
-        console.warn("Input object must contain a _metadata object.");
-        return false;
-      }
-
-      if (!("_data" in obj)) {
-        console.warn("Input object must contain a _data object.");
-        return false;
-      }
-
-      var data = obj._data;
-
-      // check: metadata should not contain cyclic structures
-      try {} catch (e) {
-        console.warn("The metadata object contains cyclic structures. Cannot be used.");
-        return false;
-      }
-
-      var inputCase = PixBlockEncoder.determineDataCase(data);
-
-      // testing the case based on the kinf of data we want to input
-      if (inputCase === dataCases.invalid) {
-        console.warn("The input is invalid.");
-      }
-
-      return inputCase;
-    }
-  }, {
-    key: 'determineDataCase',
-    value: function determineDataCase(data) {
-      if (data instanceof Object) {
-        if (CodecUtils.isTypedArray(data)) return dataCases.typedArray;
-
-        /*
-        if( data instanceof Array )
-          if(data.every( function(element){ return CodecUtils.isTypedArray(element) }))
-            return dataCases.mixedArrays;
-        */
-
-        // TODO: change the name of this case, since we want to accept Arrays of whatever
-        if (data instanceof Array) return dataCases.mixedArrays;
-
-        return dataCases.complexObject;
-      } else {
-        return dataCases.invalid;
-      }
-    }
-  }]);
-  return PixBlockEncoder;
-}(); /* END of class PixBlockEncoder */
-
-/*
-* Author    Jonathan Lurie - http://me.jonahanlurie.fr
-*
-* License   MIT
-* Link      https://github.com/jonathanlurie/pixpipejs
-* Lab       MCIN - Montreal Neurological Institute
-*/
-
-var PixBlockDecoder = function () {
-  function PixBlockDecoder() {
-    classCallCheck$1$1(this, PixBlockDecoder);
-
-    this.reset();
-  }
-
-  /**
-  * reset inputs and inputs
-  */
-
-  createClass$1$1(PixBlockDecoder, [{
-    key: 'reset',
-    value: function reset() {
-      this._input = null;
-      this._output = null;
-    }
-
-    /**
-    * Specify an input
-    * @param {ArrayBuffer} buff - the arraybuffer that contains some data to be deserialized
-    */
-
-  }, {
-    key: 'setInput',
-    value: function setInput(buff) {
-      // check input
-      if (!(buff instanceof ArrayBuffer)) {
-        console.warn("Input should be a valid ArrayBuffer");
-        return;
-      }
-      this._input = buff;
-    }
-
-    /**
-    * Get the output
-    * @return {Object} the output, or null
-    */
-
-  }, {
-    key: 'getOutput',
-    value: function getOutput() {
-      return this._output;
-    }
-
-    /*
-    * Launch the decoding
-    */
-
-  }, {
-    key: 'run',
-    value: function run() {
-
-      var input = this._input;
-      var view = new DataView(input);
-      var isLtlt = view.getUint8(0);
-      var readingByteOffset = 0;
-
-      // primer, part 1
-      // get the endianess used to encode the file
-      var isLittleEndian = view.getUint8(0);
-      readingByteOffset += 1;
-
-      // primer, part 2
-      // get the length of the string buffer (unicode json) that follows
-      var pixBlockHeaderBufferByteLength = view.getUint32(1, readingByteOffset);
-      readingByteOffset += 4;
-
-      // get the string buffer
-      var pixBlockHeaderBuffer = input.slice(readingByteOffset, readingByteOffset + pixBlockHeaderBufferByteLength);
-      var pixBlockHeader = CodecUtils.ArrayBufferToObject(pixBlockHeaderBuffer);
-      readingByteOffset += pixBlockHeaderBufferByteLength;
-
-      // fetching the metadata
-      var metadataBuffer = input.slice(readingByteOffset, readingByteOffset + pixBlockHeader.metadataByteLength);
-      var metadataObject = CodecUtils.ArrayBufferToObject(metadataBuffer);
-      readingByteOffset += pixBlockHeader.metadataByteLength;
-
-      // the data streams are the byte streams when they are converted back to actual typedArrays/Objects
-      var dataStreams = [];
-
-      for (var i = 0; i < pixBlockHeader.byteStreamInfo.length; i++) {
-        // act as a flag: if not null, it means data were compressed
-        var compressedByteLength = pixBlockHeader.byteStreamInfo[i].compressedByteLength;
-
-        // create a typed array out of the inflated buffer
-        var dataStreamConstructor = this._getDataTypeFromByteStreamInfo(pixBlockHeader.byteStreamInfo[i]);
-
-        // know if it's a typed array or a complex object
-        var isTypedArray = pixBlockHeader.byteStreamInfo[i].isTypedArray;
-
-        // meaning, the stream is compresed
-        if (compressedByteLength) {
-          // fetch the compresed dataStream
-          var compressedByteStream = new Uint8Array(input, readingByteOffset, compressedByteLength);
-
-          // inflate the dataStream
-          var inflatedByteStream = pako_1$1.inflate(compressedByteStream);
-
-          var dataStream = null;
-          /*
-          if( dataStreamConstructor === Object){
-            dataStream = CodecUtils.ArrayBufferToObject( inflatedByteStream.buffer  );
-          }else{
-            dataStream = new dataStreamConstructor( inflatedByteStream.buffer );
-          }
-          */
-
-          if (isTypedArray) {
-            dataStream = new dataStreamConstructor(inflatedByteStream.buffer);
-          } else {
-            dataStream = CodecUtils.ArrayBufferToObject(inflatedByteStream.buffer);
-          }
-
-          dataStreams.push(dataStream);
-          readingByteOffset += compressedByteLength;
-        }
-        // the stream were NOT compressed
-        else {
-            var dataStream = null;
-            if (isTypedArray) {
-              dataStream = CodecUtils.extractTypedArray(input, readingByteOffset, this._getDataTypeFromByteStreamInfo(pixBlockHeader.byteStreamInfo[i]), pixBlockHeader.byteStreamInfo[i].length);
-            } else {
-              var objectBuffer = CodecUtils.extractTypedArray(input, readingByteOffset, Uint8Array, pixBlockHeader.byteStreamInfo[i].byteLength);
-              dataStream = CodecUtils.ArrayBufferToObject(objectBuffer.buffer);
-            }
-
-            dataStreams.push(dataStream);
-            readingByteOffset += pixBlockHeader.byteStreamInfo[i].byteLength;
-          }
-      }
-
-      // If data is a single typed array (= not composed of a subset)
-      // we get rid of the useless wrapping array
-      if (!pixBlockHeader.useMultipleDataStreams) {
-        dataStreams = dataStreams[0];
-      }
-
-      this._output = {
-        originalBlockType: pixBlockHeader.originalBlockType,
-        _data: dataStreams,
-        _metadata: metadataObject
-      };
-    }
-
-    /**
-    * Get the array type based on byte stream info.
-    * The returned object can be used as a constructor
-    * @return {Function} constructor of a typed array
-    */
-
-  }, {
-    key: '_getDataTypeFromByteStreamInfo',
-    value: function _getDataTypeFromByteStreamInfo(bsi) {
-      var dataType = "Object";
-      var globalObject = CodecUtils.getGlobalObject();
-
-      if (bsi.type === "int") {
-        dataType = bsi.signed ? "Uint" : "Int";
-        dataType += bsi.bytesPerElements * 8 + "Array";
-      } else if (bsi.type === "float") {
-        dataType = "Float";
-        dataType += bsi.bytesPerElements * 8 + "Array";
-        var globalObject = CodecUtils.getGlobalObject();
-      }
-
-      return globalObject[dataType];
-    }
-  }]);
-  return PixBlockDecoder;
-}(); /* END of class PixBlockDecoder */
-
-var global$1$1 = typeof global$1 !== "undefined" ? global$1 : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};
-
-// shim for using process in browser
-// based off https://github.com/defunctzombie/node-process/blob/master/browser.js
-
-function defaultSetTimout$1() {
-  throw new Error('setTimeout has not been defined');
-}
-function defaultClearTimeout$1() {
-  throw new Error('clearTimeout has not been defined');
-}
-var cachedSetTimeout$1 = defaultSetTimout$1;
-var cachedClearTimeout$1 = defaultClearTimeout$1;
-if (typeof global$1$1.setTimeout === 'function') {
-  cachedSetTimeout$1 = setTimeout;
-}
-if (typeof global$1$1.clearTimeout === 'function') {
-  cachedClearTimeout$1 = clearTimeout;
-}
-
-function runTimeout$1(fun) {
-  if (cachedSetTimeout$1 === setTimeout) {
-    //normal enviroments in sane situations
-    return setTimeout(fun, 0);
-  }
-  // if setTimeout wasn't available but was latter defined
-  if ((cachedSetTimeout$1 === defaultSetTimout$1 || !cachedSetTimeout$1) && setTimeout) {
-    cachedSetTimeout$1 = setTimeout;
-    return setTimeout(fun, 0);
-  }
-  try {
-    // when when somebody has screwed with setTimeout but no I.E. maddness
-    return cachedSetTimeout$1(fun, 0);
-  } catch (e) {
-    try {
-      // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-      return cachedSetTimeout$1.call(null, fun, 0);
-    } catch (e) {
-      // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-      return cachedSetTimeout$1.call(this, fun, 0);
-    }
-  }
-}
-function runClearTimeout$1(marker) {
-  if (cachedClearTimeout$1 === clearTimeout) {
-    //normal enviroments in sane situations
-    return clearTimeout(marker);
-  }
-  // if clearTimeout wasn't available but was latter defined
-  if ((cachedClearTimeout$1 === defaultClearTimeout$1 || !cachedClearTimeout$1) && clearTimeout) {
-    cachedClearTimeout$1 = clearTimeout;
-    return clearTimeout(marker);
-  }
-  try {
-    // when when somebody has screwed with setTimeout but no I.E. maddness
-    return cachedClearTimeout$1(marker);
-  } catch (e) {
-    try {
-      // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-      return cachedClearTimeout$1.call(null, marker);
-    } catch (e) {
-      // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-      // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-      return cachedClearTimeout$1.call(this, marker);
-    }
-  }
-}
-var queue$1 = [];
-var draining$1 = false;
-var currentQueue$1;
-var queueIndex$1 = -1;
-
-function cleanUpNextTick$1() {
-  if (!draining$1 || !currentQueue$1) {
-    return;
-  }
-  draining$1 = false;
-  if (currentQueue$1.length) {
-    queue$1 = currentQueue$1.concat(queue$1);
-  } else {
-    queueIndex$1 = -1;
-  }
-  if (queue$1.length) {
-    drainQueue$1();
-  }
-}
-
-function drainQueue$1() {
-  if (draining$1) {
-    return;
-  }
-  var timeout = runTimeout$1(cleanUpNextTick$1);
-  draining$1 = true;
-
-  var len = queue$1.length;
-  while (len) {
-    currentQueue$1 = queue$1;
-    queue$1 = [];
-    while (++queueIndex$1 < len) {
-      if (currentQueue$1) {
-        currentQueue$1[queueIndex$1].run();
-      }
-    }
-    queueIndex$1 = -1;
-    len = queue$1.length;
-  }
-  currentQueue$1 = null;
-  draining$1 = false;
-  runClearTimeout$1(timeout);
-}
-function nextTick$1(fun) {
-  var args = new Array(arguments.length - 1);
-  if (arguments.length > 1) {
-    for (var i = 1; i < arguments.length; i++) {
-      args[i - 1] = arguments[i];
-    }
-  }
-  queue$1.push(new Item$1(fun, args));
-  if (queue$1.length === 1 && !draining$1) {
-    runTimeout$1(drainQueue$1);
-  }
-}
-// v8 likes predictible objects
-function Item$1(fun, array) {
-  this.fun = fun;
-  this.array = array;
-}
-Item$1.prototype.run = function () {
-  this.fun.apply(null, this.array);
-};
-var title$1 = 'browser';
-var platform$1 = 'browser';
-var browser$1 = true;
-var env$1 = {};
-var argv$1 = [];
-var version$1 = ''; // empty string to avoid regexp issues
-var versions$1 = {};
-var release$1 = {};
-var config$1 = {};
-
-function noop$1() {}
-
-var on$1 = noop$1;
-var addListener$1 = noop$1;
-var once$1 = noop$1;
-var off$1 = noop$1;
-var removeListener$1 = noop$1;
-var removeAllListeners$1 = noop$1;
-var emit$1 = noop$1;
-
-function binding$1(name) {
-  throw new Error('process.binding is not supported');
-}
-
-function cwd$1() {
-  return '/';
-}
-function chdir$1(dir) {
-  throw new Error('process.chdir is not supported');
-}
-function umask$1() {
-  return 0;
-}
-
-// from https://github.com/kumavis/browser-process-hrtime/blob/master/index.js
-var performance$2 = global$1$1.performance || {};
-var performanceNow$1 = performance$2.now || performance$2.mozNow || performance$2.msNow || performance$2.oNow || performance$2.webkitNow || function () {
-  return new Date().getTime();
-};
-
-// generate timestamp or delta
-// see http://nodejs.org/api/process.html#process_process_hrtime
-function hrtime$1(previousTimestamp) {
-  var clocktime = performanceNow$1.call(performance$2) * 1e-3;
-  var seconds = Math.floor(clocktime);
-  var nanoseconds = Math.floor(clocktime % 1 * 1e9);
-  if (previousTimestamp) {
-    seconds = seconds - previousTimestamp[0];
-    nanoseconds = nanoseconds - previousTimestamp[1];
-    if (nanoseconds < 0) {
-      seconds--;
-      nanoseconds += 1e9;
-    }
-  }
-  return [seconds, nanoseconds];
-}
-
-var startTime$1 = new Date();
-function uptime$1() {
-  var currentTime = new Date();
-  var dif = currentTime - startTime$1;
-  return dif / 1000;
-}
-
-var process$1 = {
-  nextTick: nextTick$1,
-  title: title$1,
-  browser: browser$1,
-  env: env$1,
-  argv: argv$1,
-  version: version$1,
-  versions: versions$1,
-  on: on$1,
-  addListener: addListener$1,
-  once: once$1,
-  off: off$1,
-  removeListener: removeListener$1,
-  removeAllListeners: removeAllListeners$1,
-  emit: emit$1,
-  binding: binding$1,
-  cwd: cwd$1,
-  chdir: chdir$1,
-  umask: umask$1,
-  hrtime: hrtime$1,
-  platform: platform$1,
-  release: release$1,
-  config: config$1,
-  uptime: uptime$1
-};
-
-var md5$2 = createCommonjsModule$1(function (module) {
-  /**
-   * [js-md5]{@link https://github.com/emn178/js-md5}
-   *
-   * @namespace md5
-   * @version 0.6.1
-   * @author Chen, Yi-Cyuan [emn178@gmail.com]
-   * @copyright Chen, Yi-Cyuan 2014-2017
-   * @license MIT
-   */
-  (function () {
-    'use strict';
-
-    var ERROR = 'input is invalid type';
-    var WINDOW = (typeof window === 'undefined' ? 'undefined' : _typeof(window)) === 'object';
-    var root = WINDOW ? window : {};
-    if (root.JS_MD5_NO_WINDOW) {
-      WINDOW = false;
-    }
-    var WEB_WORKER = !WINDOW && (typeof self === 'undefined' ? 'undefined' : _typeof(self)) === 'object';
-    var NODE_JS = !root.JS_MD5_NO_NODE_JS && (typeof process$1 === 'undefined' ? 'undefined' : _typeof(process$1)) === 'object' && process$1.versions && process$1.versions.node;
-    if (NODE_JS) {
-      root = commonjsGlobal$1;
-    } else if (WEB_WORKER) {
-      root = self;
-    }
-    var COMMON_JS = !root.JS_MD5_NO_COMMON_JS && 'object' === 'object' && module.exports;
-    var AMD = typeof undefined === 'function' && undefined.amd;
-    var ARRAY_BUFFER = !root.JS_MD5_NO_ARRAY_BUFFER && typeof ArrayBuffer !== 'undefined';
-    var HEX_CHARS = '0123456789abcdef'.split('');
-    var EXTRA = [128, 32768, 8388608, -2147483648];
-    var SHIFT = [0, 8, 16, 24];
-    var OUTPUT_TYPES = ['hex', 'array', 'digest', 'buffer', 'arrayBuffer', 'base64'];
-    var BASE64_ENCODE_CHAR = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('');
-
-    var blocks = [],
-        buffer8;
-    if (ARRAY_BUFFER) {
-      var buffer = new ArrayBuffer(68);
-      buffer8 = new Uint8Array(buffer);
-      blocks = new Uint32Array(buffer);
-    }
-
-    if (root.JS_MD5_NO_NODE_JS || !Array.isArray) {
-      Array.isArray = function (obj) {
-        return Object.prototype.toString.call(obj) === '[object Array]';
-      };
-    }
-
-    if (ARRAY_BUFFER && (root.JS_MD5_NO_ARRAY_BUFFER_IS_VIEW || !ArrayBuffer.isView)) {
-      ArrayBuffer.isView = function (obj) {
-        return (typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' && obj.buffer && obj.buffer.constructor === ArrayBuffer;
-      };
-    }
-
-    /**
-     * @method hex
-     * @memberof md5
-     * @description Output hash as hex string
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {String} Hex string
-     * @example
-     * md5.hex('The quick brown fox jumps over the lazy dog');
-     * // equal to
-     * md5('The quick brown fox jumps over the lazy dog');
-     */
-    /**
-     * @method digest
-     * @memberof md5
-     * @description Output hash as bytes array
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {Array} Bytes array
-     * @example
-     * md5.digest('The quick brown fox jumps over the lazy dog');
-     */
-    /**
-     * @method array
-     * @memberof md5
-     * @description Output hash as bytes array
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {Array} Bytes array
-     * @example
-     * md5.array('The quick brown fox jumps over the lazy dog');
-     */
-    /**
-     * @method arrayBuffer
-     * @memberof md5
-     * @description Output hash as ArrayBuffer
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {ArrayBuffer} ArrayBuffer
-     * @example
-     * md5.arrayBuffer('The quick brown fox jumps over the lazy dog');
-     */
-    /**
-     * @method buffer
-     * @deprecated This maybe confuse with Buffer in node.js. Please use arrayBuffer instead.
-     * @memberof md5
-     * @description Output hash as ArrayBuffer
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {ArrayBuffer} ArrayBuffer
-     * @example
-     * md5.buffer('The quick brown fox jumps over the lazy dog');
-     */
-    /**
-     * @method base64
-     * @memberof md5
-     * @description Output hash as base64 string
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {String} base64 string
-     * @example
-     * md5.base64('The quick brown fox jumps over the lazy dog');
-     */
-    var createOutputMethod = function createOutputMethod(outputType) {
-      return function (message) {
-        return new Md5(true).update(message)[outputType]();
-      };
-    };
-
-    /**
-     * @method create
-     * @memberof md5
-     * @description Create Md5 object
-     * @returns {Md5} Md5 object.
-     * @example
-     * var hash = md5.create();
-     */
-    /**
-     * @method update
-     * @memberof md5
-     * @description Create and update Md5 object
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {Md5} Md5 object.
-     * @example
-     * var hash = md5.update('The quick brown fox jumps over the lazy dog');
-     * // equal to
-     * var hash = md5.create();
-     * hash.update('The quick brown fox jumps over the lazy dog');
-     */
-    var createMethod = function createMethod() {
-      var method = createOutputMethod('hex');
-      if (NODE_JS) {
-        method = nodeWrap(method);
-      }
-      method.create = function () {
-        return new Md5();
-      };
-      method.update = function (message) {
-        return method.create().update(message);
-      };
-      for (var i = 0; i < OUTPUT_TYPES.length; ++i) {
-        var type = OUTPUT_TYPES[i];
-        method[type] = createOutputMethod(type);
-      }
-      return method;
-    };
-
-    var nodeWrap = function nodeWrap(method) {
-      var crypto = eval("require('crypto')");
-      var Buffer = eval("require('buffer').Buffer");
-      var nodeMethod = function nodeMethod(message) {
-        if (typeof message === 'string') {
-          return crypto.createHash('md5').update(message, 'utf8').digest('hex');
-        } else {
-          if (message === null || message === undefined) {
-            throw ERROR;
-          } else if (message.constructor === ArrayBuffer) {
-            message = new Uint8Array(message);
-          }
-        }
-        if (Array.isArray(message) || ArrayBuffer.isView(message) || message.constructor === Buffer) {
-          return crypto.createHash('md5').update(new Buffer(message)).digest('hex');
-        } else {
-          return method(message);
-        }
-      };
-      return nodeMethod;
-    };
-
-    /**
-     * Md5 class
-     * @class Md5
-     * @description This is internal class.
-     * @see {@link md5.create}
-     */
-    function Md5(sharedMemory) {
-      if (sharedMemory) {
-        blocks[0] = blocks[16] = blocks[1] = blocks[2] = blocks[3] = blocks[4] = blocks[5] = blocks[6] = blocks[7] = blocks[8] = blocks[9] = blocks[10] = blocks[11] = blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
-        this.blocks = blocks;
-        this.buffer8 = buffer8;
-      } else {
-        if (ARRAY_BUFFER) {
-          var buffer = new ArrayBuffer(68);
-          this.buffer8 = new Uint8Array(buffer);
-          this.blocks = new Uint32Array(buffer);
-        } else {
-          this.blocks = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        }
-      }
-      this.h0 = this.h1 = this.h2 = this.h3 = this.start = this.bytes = 0;
-      this.finalized = this.hashed = false;
-      this.first = true;
-    }
-
-    /**
-     * @method update
-     * @memberof Md5
-     * @instance
-     * @description Update hash
-     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-     * @returns {Md5} Md5 object.
-     * @see {@link md5.update}
-     */
-    Md5.prototype.update = function (message) {
-      if (this.finalized) {
-        return;
-      }
-
-      var notString,
-          type = typeof message === 'undefined' ? 'undefined' : _typeof(message);
-      if (type !== 'string') {
-        if (type === 'object') {
-          if (message === null) {
-            throw ERROR;
-          } else if (ARRAY_BUFFER && message.constructor === ArrayBuffer) {
-            message = new Uint8Array(message);
-          } else if (!Array.isArray(message)) {
-            if (!ARRAY_BUFFER || !ArrayBuffer.isView(message)) {
-              throw ERROR;
-            }
-          }
-        } else {
-          throw ERROR;
-        }
-        notString = true;
-      }
-      var code,
-          index = 0,
-          i,
-          length = message.length,
-          blocks = this.blocks;
-      var buffer8 = this.buffer8;
-
-      while (index < length) {
-        if (this.hashed) {
-          this.hashed = false;
-          blocks[0] = blocks[16];
-          blocks[16] = blocks[1] = blocks[2] = blocks[3] = blocks[4] = blocks[5] = blocks[6] = blocks[7] = blocks[8] = blocks[9] = blocks[10] = blocks[11] = blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
-        }
-
-        if (notString) {
-          if (ARRAY_BUFFER) {
-            for (i = this.start; index < length && i < 64; ++index) {
-              buffer8[i++] = message[index];
-            }
-          } else {
-            for (i = this.start; index < length && i < 64; ++index) {
-              blocks[i >> 2] |= message[index] << SHIFT[i++ & 3];
-            }
-          }
-        } else {
-          if (ARRAY_BUFFER) {
-            for (i = this.start; index < length && i < 64; ++index) {
-              code = message.charCodeAt(index);
-              if (code < 0x80) {
-                buffer8[i++] = code;
-              } else if (code < 0x800) {
-                buffer8[i++] = 0xc0 | code >> 6;
-                buffer8[i++] = 0x80 | code & 0x3f;
-              } else if (code < 0xd800 || code >= 0xe000) {
-                buffer8[i++] = 0xe0 | code >> 12;
-                buffer8[i++] = 0x80 | code >> 6 & 0x3f;
-                buffer8[i++] = 0x80 | code & 0x3f;
-              } else {
-                code = 0x10000 + ((code & 0x3ff) << 10 | message.charCodeAt(++index) & 0x3ff);
-                buffer8[i++] = 0xf0 | code >> 18;
-                buffer8[i++] = 0x80 | code >> 12 & 0x3f;
-                buffer8[i++] = 0x80 | code >> 6 & 0x3f;
-                buffer8[i++] = 0x80 | code & 0x3f;
-              }
-            }
-          } else {
-            for (i = this.start; index < length && i < 64; ++index) {
-              code = message.charCodeAt(index);
-              if (code < 0x80) {
-                blocks[i >> 2] |= code << SHIFT[i++ & 3];
-              } else if (code < 0x800) {
-                blocks[i >> 2] |= (0xc0 | code >> 6) << SHIFT[i++ & 3];
-                blocks[i >> 2] |= (0x80 | code & 0x3f) << SHIFT[i++ & 3];
-              } else if (code < 0xd800 || code >= 0xe000) {
-                blocks[i >> 2] |= (0xe0 | code >> 12) << SHIFT[i++ & 3];
-                blocks[i >> 2] |= (0x80 | code >> 6 & 0x3f) << SHIFT[i++ & 3];
-                blocks[i >> 2] |= (0x80 | code & 0x3f) << SHIFT[i++ & 3];
-              } else {
-                code = 0x10000 + ((code & 0x3ff) << 10 | message.charCodeAt(++index) & 0x3ff);
-                blocks[i >> 2] |= (0xf0 | code >> 18) << SHIFT[i++ & 3];
-                blocks[i >> 2] |= (0x80 | code >> 12 & 0x3f) << SHIFT[i++ & 3];
-                blocks[i >> 2] |= (0x80 | code >> 6 & 0x3f) << SHIFT[i++ & 3];
-                blocks[i >> 2] |= (0x80 | code & 0x3f) << SHIFT[i++ & 3];
-              }
-            }
-          }
-        }
-        this.lastByteIndex = i;
-        this.bytes += i - this.start;
-        if (i >= 64) {
-          this.start = i - 64;
-          this.hash();
-          this.hashed = true;
-        } else {
-          this.start = i;
-        }
-      }
-      return this;
-    };
-
-    Md5.prototype.finalize = function () {
-      if (this.finalized) {
-        return;
-      }
-      this.finalized = true;
-      var blocks = this.blocks,
-          i = this.lastByteIndex;
-      blocks[i >> 2] |= EXTRA[i & 3];
-      if (i >= 56) {
-        if (!this.hashed) {
-          this.hash();
-        }
-        blocks[0] = blocks[16];
-        blocks[16] = blocks[1] = blocks[2] = blocks[3] = blocks[4] = blocks[5] = blocks[6] = blocks[7] = blocks[8] = blocks[9] = blocks[10] = blocks[11] = blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
-      }
-      blocks[14] = this.bytes << 3;
-      this.hash();
-    };
-
-    Md5.prototype.hash = function () {
-      var a,
-          b,
-          c,
-          d,
-          bc,
-          da,
-          blocks = this.blocks;
-
-      if (this.first) {
-        a = blocks[0] - 680876937;
-        a = (a << 7 | a >>> 25) - 271733879 << 0;
-        d = (-1732584194 ^ a & 2004318071) + blocks[1] - 117830708;
-        d = (d << 12 | d >>> 20) + a << 0;
-        c = (-271733879 ^ d & (a ^ -271733879)) + blocks[2] - 1126478375;
-        c = (c << 17 | c >>> 15) + d << 0;
-        b = (a ^ c & (d ^ a)) + blocks[3] - 1316259209;
-        b = (b << 22 | b >>> 10) + c << 0;
-      } else {
-        a = this.h0;
-        b = this.h1;
-        c = this.h2;
-        d = this.h3;
-        a += (d ^ b & (c ^ d)) + blocks[0] - 680876936;
-        a = (a << 7 | a >>> 25) + b << 0;
-        d += (c ^ a & (b ^ c)) + blocks[1] - 389564586;
-        d = (d << 12 | d >>> 20) + a << 0;
-        c += (b ^ d & (a ^ b)) + blocks[2] + 606105819;
-        c = (c << 17 | c >>> 15) + d << 0;
-        b += (a ^ c & (d ^ a)) + blocks[3] - 1044525330;
-        b = (b << 22 | b >>> 10) + c << 0;
-      }
-
-      a += (d ^ b & (c ^ d)) + blocks[4] - 176418897;
-      a = (a << 7 | a >>> 25) + b << 0;
-      d += (c ^ a & (b ^ c)) + blocks[5] + 1200080426;
-      d = (d << 12 | d >>> 20) + a << 0;
-      c += (b ^ d & (a ^ b)) + blocks[6] - 1473231341;
-      c = (c << 17 | c >>> 15) + d << 0;
-      b += (a ^ c & (d ^ a)) + blocks[7] - 45705983;
-      b = (b << 22 | b >>> 10) + c << 0;
-      a += (d ^ b & (c ^ d)) + blocks[8] + 1770035416;
-      a = (a << 7 | a >>> 25) + b << 0;
-      d += (c ^ a & (b ^ c)) + blocks[9] - 1958414417;
-      d = (d << 12 | d >>> 20) + a << 0;
-      c += (b ^ d & (a ^ b)) + blocks[10] - 42063;
-      c = (c << 17 | c >>> 15) + d << 0;
-      b += (a ^ c & (d ^ a)) + blocks[11] - 1990404162;
-      b = (b << 22 | b >>> 10) + c << 0;
-      a += (d ^ b & (c ^ d)) + blocks[12] + 1804603682;
-      a = (a << 7 | a >>> 25) + b << 0;
-      d += (c ^ a & (b ^ c)) + blocks[13] - 40341101;
-      d = (d << 12 | d >>> 20) + a << 0;
-      c += (b ^ d & (a ^ b)) + blocks[14] - 1502002290;
-      c = (c << 17 | c >>> 15) + d << 0;
-      b += (a ^ c & (d ^ a)) + blocks[15] + 1236535329;
-      b = (b << 22 | b >>> 10) + c << 0;
-      a += (c ^ d & (b ^ c)) + blocks[1] - 165796510;
-      a = (a << 5 | a >>> 27) + b << 0;
-      d += (b ^ c & (a ^ b)) + blocks[6] - 1069501632;
-      d = (d << 9 | d >>> 23) + a << 0;
-      c += (a ^ b & (d ^ a)) + blocks[11] + 643717713;
-      c = (c << 14 | c >>> 18) + d << 0;
-      b += (d ^ a & (c ^ d)) + blocks[0] - 373897302;
-      b = (b << 20 | b >>> 12) + c << 0;
-      a += (c ^ d & (b ^ c)) + blocks[5] - 701558691;
-      a = (a << 5 | a >>> 27) + b << 0;
-      d += (b ^ c & (a ^ b)) + blocks[10] + 38016083;
-      d = (d << 9 | d >>> 23) + a << 0;
-      c += (a ^ b & (d ^ a)) + blocks[15] - 660478335;
-      c = (c << 14 | c >>> 18) + d << 0;
-      b += (d ^ a & (c ^ d)) + blocks[4] - 405537848;
-      b = (b << 20 | b >>> 12) + c << 0;
-      a += (c ^ d & (b ^ c)) + blocks[9] + 568446438;
-      a = (a << 5 | a >>> 27) + b << 0;
-      d += (b ^ c & (a ^ b)) + blocks[14] - 1019803690;
-      d = (d << 9 | d >>> 23) + a << 0;
-      c += (a ^ b & (d ^ a)) + blocks[3] - 187363961;
-      c = (c << 14 | c >>> 18) + d << 0;
-      b += (d ^ a & (c ^ d)) + blocks[8] + 1163531501;
-      b = (b << 20 | b >>> 12) + c << 0;
-      a += (c ^ d & (b ^ c)) + blocks[13] - 1444681467;
-      a = (a << 5 | a >>> 27) + b << 0;
-      d += (b ^ c & (a ^ b)) + blocks[2] - 51403784;
-      d = (d << 9 | d >>> 23) + a << 0;
-      c += (a ^ b & (d ^ a)) + blocks[7] + 1735328473;
-      c = (c << 14 | c >>> 18) + d << 0;
-      b += (d ^ a & (c ^ d)) + blocks[12] - 1926607734;
-      b = (b << 20 | b >>> 12) + c << 0;
-      bc = b ^ c;
-      a += (bc ^ d) + blocks[5] - 378558;
-      a = (a << 4 | a >>> 28) + b << 0;
-      d += (bc ^ a) + blocks[8] - 2022574463;
-      d = (d << 11 | d >>> 21) + a << 0;
-      da = d ^ a;
-      c += (da ^ b) + blocks[11] + 1839030562;
-      c = (c << 16 | c >>> 16) + d << 0;
-      b += (da ^ c) + blocks[14] - 35309556;
-      b = (b << 23 | b >>> 9) + c << 0;
-      bc = b ^ c;
-      a += (bc ^ d) + blocks[1] - 1530992060;
-      a = (a << 4 | a >>> 28) + b << 0;
-      d += (bc ^ a) + blocks[4] + 1272893353;
-      d = (d << 11 | d >>> 21) + a << 0;
-      da = d ^ a;
-      c += (da ^ b) + blocks[7] - 155497632;
-      c = (c << 16 | c >>> 16) + d << 0;
-      b += (da ^ c) + blocks[10] - 1094730640;
-      b = (b << 23 | b >>> 9) + c << 0;
-      bc = b ^ c;
-      a += (bc ^ d) + blocks[13] + 681279174;
-      a = (a << 4 | a >>> 28) + b << 0;
-      d += (bc ^ a) + blocks[0] - 358537222;
-      d = (d << 11 | d >>> 21) + a << 0;
-      da = d ^ a;
-      c += (da ^ b) + blocks[3] - 722521979;
-      c = (c << 16 | c >>> 16) + d << 0;
-      b += (da ^ c) + blocks[6] + 76029189;
-      b = (b << 23 | b >>> 9) + c << 0;
-      bc = b ^ c;
-      a += (bc ^ d) + blocks[9] - 640364487;
-      a = (a << 4 | a >>> 28) + b << 0;
-      d += (bc ^ a) + blocks[12] - 421815835;
-      d = (d << 11 | d >>> 21) + a << 0;
-      da = d ^ a;
-      c += (da ^ b) + blocks[15] + 530742520;
-      c = (c << 16 | c >>> 16) + d << 0;
-      b += (da ^ c) + blocks[2] - 995338651;
-      b = (b << 23 | b >>> 9) + c << 0;
-      a += (c ^ (b | ~d)) + blocks[0] - 198630844;
-      a = (a << 6 | a >>> 26) + b << 0;
-      d += (b ^ (a | ~c)) + blocks[7] + 1126891415;
-      d = (d << 10 | d >>> 22) + a << 0;
-      c += (a ^ (d | ~b)) + blocks[14] - 1416354905;
-      c = (c << 15 | c >>> 17) + d << 0;
-      b += (d ^ (c | ~a)) + blocks[5] - 57434055;
-      b = (b << 21 | b >>> 11) + c << 0;
-      a += (c ^ (b | ~d)) + blocks[12] + 1700485571;
-      a = (a << 6 | a >>> 26) + b << 0;
-      d += (b ^ (a | ~c)) + blocks[3] - 1894986606;
-      d = (d << 10 | d >>> 22) + a << 0;
-      c += (a ^ (d | ~b)) + blocks[10] - 1051523;
-      c = (c << 15 | c >>> 17) + d << 0;
-      b += (d ^ (c | ~a)) + blocks[1] - 2054922799;
-      b = (b << 21 | b >>> 11) + c << 0;
-      a += (c ^ (b | ~d)) + blocks[8] + 1873313359;
-      a = (a << 6 | a >>> 26) + b << 0;
-      d += (b ^ (a | ~c)) + blocks[15] - 30611744;
-      d = (d << 10 | d >>> 22) + a << 0;
-      c += (a ^ (d | ~b)) + blocks[6] - 1560198380;
-      c = (c << 15 | c >>> 17) + d << 0;
-      b += (d ^ (c | ~a)) + blocks[13] + 1309151649;
-      b = (b << 21 | b >>> 11) + c << 0;
-      a += (c ^ (b | ~d)) + blocks[4] - 145523070;
-      a = (a << 6 | a >>> 26) + b << 0;
-      d += (b ^ (a | ~c)) + blocks[11] - 1120210379;
-      d = (d << 10 | d >>> 22) + a << 0;
-      c += (a ^ (d | ~b)) + blocks[2] + 718787259;
-      c = (c << 15 | c >>> 17) + d << 0;
-      b += (d ^ (c | ~a)) + blocks[9] - 343485551;
-      b = (b << 21 | b >>> 11) + c << 0;
-
-      if (this.first) {
-        this.h0 = a + 1732584193 << 0;
-        this.h1 = b - 271733879 << 0;
-        this.h2 = c - 1732584194 << 0;
-        this.h3 = d + 271733878 << 0;
-        this.first = false;
-      } else {
-        this.h0 = this.h0 + a << 0;
-        this.h1 = this.h1 + b << 0;
-        this.h2 = this.h2 + c << 0;
-        this.h3 = this.h3 + d << 0;
-      }
-    };
-
-    /**
-     * @method hex
-     * @memberof Md5
-     * @instance
-     * @description Output hash as hex string
-     * @returns {String} Hex string
-     * @see {@link md5.hex}
-     * @example
-     * hash.hex();
-     */
-    Md5.prototype.hex = function () {
-      this.finalize();
-
-      var h0 = this.h0,
-          h1 = this.h1,
-          h2 = this.h2,
-          h3 = this.h3;
-
-      return HEX_CHARS[h0 >> 4 & 0x0F] + HEX_CHARS[h0 & 0x0F] + HEX_CHARS[h0 >> 12 & 0x0F] + HEX_CHARS[h0 >> 8 & 0x0F] + HEX_CHARS[h0 >> 20 & 0x0F] + HEX_CHARS[h0 >> 16 & 0x0F] + HEX_CHARS[h0 >> 28 & 0x0F] + HEX_CHARS[h0 >> 24 & 0x0F] + HEX_CHARS[h1 >> 4 & 0x0F] + HEX_CHARS[h1 & 0x0F] + HEX_CHARS[h1 >> 12 & 0x0F] + HEX_CHARS[h1 >> 8 & 0x0F] + HEX_CHARS[h1 >> 20 & 0x0F] + HEX_CHARS[h1 >> 16 & 0x0F] + HEX_CHARS[h1 >> 28 & 0x0F] + HEX_CHARS[h1 >> 24 & 0x0F] + HEX_CHARS[h2 >> 4 & 0x0F] + HEX_CHARS[h2 & 0x0F] + HEX_CHARS[h2 >> 12 & 0x0F] + HEX_CHARS[h2 >> 8 & 0x0F] + HEX_CHARS[h2 >> 20 & 0x0F] + HEX_CHARS[h2 >> 16 & 0x0F] + HEX_CHARS[h2 >> 28 & 0x0F] + HEX_CHARS[h2 >> 24 & 0x0F] + HEX_CHARS[h3 >> 4 & 0x0F] + HEX_CHARS[h3 & 0x0F] + HEX_CHARS[h3 >> 12 & 0x0F] + HEX_CHARS[h3 >> 8 & 0x0F] + HEX_CHARS[h3 >> 20 & 0x0F] + HEX_CHARS[h3 >> 16 & 0x0F] + HEX_CHARS[h3 >> 28 & 0x0F] + HEX_CHARS[h3 >> 24 & 0x0F];
-    };
-
-    /**
-     * @method toString
-     * @memberof Md5
-     * @instance
-     * @description Output hash as hex string
-     * @returns {String} Hex string
-     * @see {@link md5.hex}
-     * @example
-     * hash.toString();
-     */
-    Md5.prototype.toString = Md5.prototype.hex;
-
-    /**
-     * @method digest
-     * @memberof Md5
-     * @instance
-     * @description Output hash as bytes array
-     * @returns {Array} Bytes array
-     * @see {@link md5.digest}
-     * @example
-     * hash.digest();
-     */
-    Md5.prototype.digest = function () {
-      this.finalize();
-
-      var h0 = this.h0,
-          h1 = this.h1,
-          h2 = this.h2,
-          h3 = this.h3;
-      return [h0 & 0xFF, h0 >> 8 & 0xFF, h0 >> 16 & 0xFF, h0 >> 24 & 0xFF, h1 & 0xFF, h1 >> 8 & 0xFF, h1 >> 16 & 0xFF, h1 >> 24 & 0xFF, h2 & 0xFF, h2 >> 8 & 0xFF, h2 >> 16 & 0xFF, h2 >> 24 & 0xFF, h3 & 0xFF, h3 >> 8 & 0xFF, h3 >> 16 & 0xFF, h3 >> 24 & 0xFF];
-    };
-
-    /**
-     * @method array
-     * @memberof Md5
-     * @instance
-     * @description Output hash as bytes array
-     * @returns {Array} Bytes array
-     * @see {@link md5.array}
-     * @example
-     * hash.array();
-     */
-    Md5.prototype.array = Md5.prototype.digest;
-
-    /**
-     * @method arrayBuffer
-     * @memberof Md5
-     * @instance
-     * @description Output hash as ArrayBuffer
-     * @returns {ArrayBuffer} ArrayBuffer
-     * @see {@link md5.arrayBuffer}
-     * @example
-     * hash.arrayBuffer();
-     */
-    Md5.prototype.arrayBuffer = function () {
-      this.finalize();
-
-      var buffer = new ArrayBuffer(16);
-      var blocks = new Uint32Array(buffer);
-      blocks[0] = this.h0;
-      blocks[1] = this.h1;
-      blocks[2] = this.h2;
-      blocks[3] = this.h3;
-      return buffer;
-    };
-
-    /**
-     * @method buffer
-     * @deprecated This maybe confuse with Buffer in node.js. Please use arrayBuffer instead.
-     * @memberof Md5
-     * @instance
-     * @description Output hash as ArrayBuffer
-     * @returns {ArrayBuffer} ArrayBuffer
-     * @see {@link md5.buffer}
-     * @example
-     * hash.buffer();
-     */
-    Md5.prototype.buffer = Md5.prototype.arrayBuffer;
-
-    /**
-     * @method base64
-     * @memberof Md5
-     * @instance
-     * @description Output hash as base64 string
-     * @returns {String} base64 string
-     * @see {@link md5.base64}
-     * @example
-     * hash.base64();
-     */
-    Md5.prototype.base64 = function () {
-      var v1,
-          v2,
-          v3,
-          base64Str = '',
-          bytes = this.array();
-      for (var i = 0; i < 15;) {
-        v1 = bytes[i++];
-        v2 = bytes[i++];
-        v3 = bytes[i++];
-        base64Str += BASE64_ENCODE_CHAR[v1 >>> 2] + BASE64_ENCODE_CHAR[(v1 << 4 | v2 >>> 4) & 63] + BASE64_ENCODE_CHAR[(v2 << 2 | v3 >>> 6) & 63] + BASE64_ENCODE_CHAR[v3 & 63];
-      }
-      v1 = bytes[i];
-      base64Str += BASE64_ENCODE_CHAR[v1 >>> 2] + BASE64_ENCODE_CHAR[v1 << 4 & 63] + '==';
-      return base64Str;
-    };
-
-    var exports = createMethod();
-
-    if (COMMON_JS) {
-      module.exports = exports;
-    } else {
-      /**
-       * @method md5
-       * @description Md5 hash function, export to global in browsers.
-       * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
-       * @returns {String} md5 hashes
-       * @example
-       * md5(''); // d41d8cd98f00b204e9800998ecf8427e
-       * md5('The quick brown fox jumps over the lazy dog'); // 9e107d9d372bb6826bd81d3542a419d6
-       * md5('The quick brown fox jumps over the lazy dog.'); // e4d909c290d0fb1ca068ffaddf22cbd0
-       *
-       * // It also supports UTF-8 encoding
-       * md5('中文'); // a7bac2239fcdcb3a067903d8077c4a07
-       *
-       * // It also supports byte `Array`, `Uint8Array`, `ArrayBuffer`
-       * md5([]); // d41d8cd98f00b204e9800998ecf8427e
-       * md5(new Uint8Array([])); // d41d8cd98f00b204e9800998ecf8427e
-       */
-      root.md5 = exports;
-      if (AMD) {
-        undefined(function () {
-          return exports;
-        });
-      }
-    }
-  })();
-});
-
-/*
-* Author    Jonathan Lurie - http://me.jonahanlurie.fr
-*
-* License   MIT
-* Link      https://github.com/jonathanlurie/pixpipejs
-* Lab       MCIN - Montreal Neurological Institute
-*/
-
-/**
-* A PixBinEncoder instance takes an Image2D or Image3D as input with `addInput(...)`
-* and encode it so that it can be saved as a *.pixp file.
-* An output filename can be specified using `.setMetadata("filename", "yourName.pixp");`,
-* by default, the name is "untitled.pixp".
-* When `update()` is called, a gzip blog is prepared as output[0] and can then be downloaded
-* when calling the method `.download()`. The gzip blob could also be sent over AJAX
-* using a third party library.
-*
-* **Usage**
-* - [examples/savePixpFile.html](../examples/savePixpFile.html)
-*/
-
-var PixBinEncoder$1 = function () {
-  function PixBinEncoder() {
-    classCallCheck$1$1(this, PixBinEncoder);
-
-    this._compress = true;
-    this.reset();
-  }
-
-  /**
-  * [static]
-  * the first sequence of bytes for a pixbin file is this ASCII string
-  */
-
-  createClass$1$1(PixBinEncoder, [{
-    key: 'reset',
-
-    /**
-    * [PRIVATE]
-    * reset inputs and inputs
-    */
-    value: function reset() {
-      this._inputs = [];
-      this._output = null;
-      this._options = {
-        madeWith: "pixbincodec_js",
-        userObject: null,
-        description: null
-      };
-    }
-
-    /**
-    * Set a boolean to secify if data should be compressed or not
-    * @param {Boolean} b - true to compress, false to not compress
-    */
-
-  }, {
-    key: 'enableDataCompression',
-    value: function enableDataCompression(b) {
-      this._compress = b;
-    }
-
-    /**
-    * Overwrite one of the default options.
-    * @param {String} optionName - one of "madeWith" (default: "pixbincodec_js"), "userObject" (default: null), "description" (default: null)
-    */
-
-  }, {
-    key: 'setOption',
-    value: function setOption(optionName, value) {
-      if (optionName in this._options) {
-        this._options[optionName] = value;
-      }
-    }
-
-    /**
-    * Add an input. Multiple inputs can be added.
-    * @param {Object} obj - an object that comtain _data and _metadata
-    */
-
-  }, {
-    key: 'addInput',
-    value: function addInput(obj) {
-      if (PixBlockEncoder.isGoodCandidate(obj)) {
-        this._inputs.push(obj);
-      }
-    }
-
-    /**
-    * Get the output
-    * @return {ArrayBuffer} the encoded data as a buffer
-    */
-
-  }, {
-    key: 'getOutput',
-    value: function getOutput() {
-      return this._output;
-    }
-
-    /**
-    * Launch the encoding
-    */
-
-  }, {
-    key: 'run',
-    value: function run() {
-      if (!this._inputs.length) {
-        console.warn("The encoder must be specified at least one input.");
-        return;
-      }
-
-      var that = this;
-      var today = new Date();
-      var isLittleEndian = CodecUtils.isPlatformLittleEndian();
-      var blockEncoder = new PixBlockEncoder();
-
-      // this object is the JSON description at the begining of a PixBin
-      var pixBinIndex = {
-        date: today.toISOString(),
-        createdWith: this._options.madeWith,
-        description: this._options.description,
-        userObject: this._options.userObject,
-        pixblocksInfo: []
-
-        // array of binary blocks (each are Uint8Array or ArrayBuffer)
-      };var pixBlocks = [];
-
-      // just a convenient shortcut
-      var pixblocksInfo = pixBinIndex.pixblocksInfo;
-
-      this._inputs.forEach(function (input, index) {
-        blockEncoder.setInput(input);
-        blockEncoder.enableDataCompression(that._compress);
-        blockEncoder.run();
-
-        var encodedBlock = blockEncoder.getOutput();
-
-        if (!encodedBlock) {
-          console.warn("The input of index " + index + " could not be encoded as a PixBlock.");
-          return;
-        }
-
-        // adding an entry to the PixBin index
-        var pixBinIndexEntry = {
-          type: input.constructor.name,
-          description: "description" in input._metadata ? input._metadata.description : null,
-          byteLength: encodedBlock.byteLength,
-          checksum: md5$2(encodedBlock)
-        };
-
-        pixblocksInfo.push(pixBinIndexEntry);
-        pixBlocks.push(encodedBlock);
-      });
-
-      if (!pixBlocks.length) {
-        console.warn("No input was compatible for PixBlock encoding.");
-      }
-
-      // Building the header ArrayBuffer of the file. It contains:
-      // - A ASCII string "pixpipe". 7 x Uint8 of charcodes (7 bytes)
-      // - A flag for encoding endianess, 0: big, 1: little. 1 x Uint8 (1 byte)
-      // - The byte length of the PixBin meta binary object. 1 x Uint32 (4 bytes)
-
-      // encoding the meta object into an ArrayBuffer
-      var pixBinIndexBinaryString = CodecUtils.objectToArrayBuffer(pixBinIndex);
-      var magicNumber = PixBinEncoder.MAGIC_NUMBER();
-
-      // the +5 stands for 1 endiannes byte (Uint8) + 4 bytes (1xUint32) of header length
-      var binPrimer = new ArrayBuffer(magicNumber.length + 5);
-      var binPrimerView = new DataView(binPrimer);
-
-      CodecUtils.setString8InBuffer(magicNumber, binPrimer);
-      binPrimerView.setUint8(magicNumber.length, +isLittleEndian);
-      binPrimerView.setUint32(magicNumber.length + 1, pixBinIndexBinaryString.byteLength, isLittleEndian);
-
-      var allBuffers = [binPrimer, pixBinIndexBinaryString].concat(pixBlocks);
-      this._output = CodecUtils.mergeBuffers(allBuffers);
-    }
-  }], [{
-    key: 'MAGIC_NUMBER',
-    value: function MAGIC_NUMBER() {
-      return "PIXPIPE_PIXBIN";
-    }
-  }]);
-  return PixBinEncoder;
-}(); /* END of class PixBinEncoder */
-
-/*
-* Author    Jonathan Lurie - http://me.jonahanlurie.fr
-*
-* License   MIT
-* Link      https://github.com/jonathanlurie/pixpipejs
-* Lab       MCIN - Montreal Neurological Institute
-*/
-
-/**
-* A PixBinDecoder instance decodes a *.pixp file and output an Image2D or Image3D.
-* The input, specified by `.addInput(...)` must be an ArrayBuffer
-* (from an `UrlToArrayBufferFilter`, an `UrlToArrayBufferReader` or anothrer source ).
-*
-* **Usage**
-* - [examples/pixpFileToImage2D.html](../examples/pixpFileToImage2D.html)
-*/
-
-var PixBinDecoder = function () {
-  function PixBinDecoder() {
-    classCallCheck$1$1(this, PixBinDecoder);
-
-    this._verifyChecksum = false;
-    this._input = null;
-    this._output = null;
-    this._binMeta = null;
-    this._parsingInfo = {
-      offsetToReachFirstBlock: -1,
-      isLittleEndian: -1
-    };
-
-    this._decodedBlocks = {};
-    this._isValid = false;
-    this.reset();
-  }
-
-  /**
-  * Specify an input
-  * @param {ArrayBuffer} buff - the input
-  */
-
-  createClass$1$1(PixBinDecoder, [{
-    key: 'setInput',
-    value: function setInput(buff) {
-      this.reset();
-
-      if (buff instanceof ArrayBuffer) {
-        this._input = buff;
-        this._isValid = this._parseIndex();
-      }
-    }
-
-    /**
-    * To be called after setInput. Tells if the buffer loaded is valid or not.
-    * @return {Boolean} true if valid, false if not.
-    */
-
-  }, {
-    key: 'isValid',
-    value: function isValid() {
-      return this._isValid;
-    }
-
-    /**
-    * Get the the decoded output
-    * @return {Object} a decoded object
-    */
-
-  }, {
-    key: 'getOutput',
-    value: function getOutput() {
-      return this._output;
-    }
-
-    /**
-    * Get the number of blocks encoded in this PixBin file
-    * @return {Number}
-    */
-
-  }, {
-    key: 'getNumberOfBlocks',
-    value: function getNumberOfBlocks() {
-      return this._binMeta.pixblocksInfo.length;
-    }
-
-    /**
-    * Get the creation date of the file in the ISO8601 format
-    * @return {String} the data
-    */
-
-  }, {
-    key: 'getBinCreationDate',
-    value: function getBinCreationDate() {
-      return this._binMeta.date;
-    }
-
-    /**
-    * Get the description of the PixBin file
-    * @return {String} the description
-    */
-
-  }, {
-    key: 'getBinDescription',
-    value: function getBinDescription() {
-      return this._binMeta.description;
-    }
-
-    /**
-    * The userObject is a generic container added to the PixBin. It can carry all sorts of data.
-    * If not specified during encoding, it's null.
-    * @return {Object} the userObject
-    */
-
-  }, {
-    key: 'getBinUserObject',
-    value: function getBinUserObject() {
-      return this._binMeta.userObject;
-    }
-
-    /**
-    * Get the description of the block at the given index
-    * @param {Number} n - the index of the block
-    * @return {String} the description of this block
-    */
-
-  }, {
-    key: 'getBlockDescription',
-    value: function getBlockDescription(n) {
-      if (n < 0 || n >= this.getNumberOfBlocks()) {
-        console.warn("The block index is out of range.");
-        return null;
-      }
-      return this._binMeta.pixblocksInfo[n].description;
-    }
-
-    /**
-    * Get the original type of the block. Convenient for knowing how to rebuild
-    * the object in its original form.
-    * @param {Number} n - the index of the block
-    * @return {String} the type ( comes from constructor.name )
-    */
-
-  }, {
-    key: 'getBlockType',
-    value: function getBlockType(n) {
-      if (n < 0 || n >= this.getNumberOfBlocks()) {
-        console.warn("The block index is out of range.");
-        return null;
-      }
-      return this._binMeta.pixblocksInfo[n].type;
-    }
-
-    /**
-    * reset I/O and data to query 
-    */
-
-  }, {
-    key: 'reset',
-    value: function reset() {
-      this._isValid = false;
-      this._input = null;
-      this._output = null;
-      this._binMeta = null;
-      this._parsingInfo = {
-        offsetToReachFirstBlock: -1,
-        isLittleEndian: -1
-      };
-      this._decodedBlocks = {};
-    }
-
-    /**
-    * Specify wether or not  the bin decoder must perform a checksum verification
-    * for each block to be decoded.
-    * @param {Boolean} b - true to perfom verification, false to skip it (default: false)
-    */
-
-  }, {
-    key: 'enableBlockVerification',
-    value: function enableBlockVerification(b) {
-      this._verifyChecksum = b;
-    }
-
-    /**
-    * [PRIVATE]
-    * 
-    */
-
-  }, {
-    key: '_parseIndex',
-    value: function _parseIndex() {
-      var input = this._input;
-
-      if (!input) {
-        console.warn("Input cannot be null");
-        return false;
-      }
-
-      var inputByteLength = input.byteLength;
-      var magicNumberToExpect = PixBinEncoder$1.MAGIC_NUMBER();
-
-      // control 1: the file must be large enough
-      if (inputByteLength < magicNumberToExpect.length + 5) {
-        console.warn("This buffer does not match a PixBin file.");
-        return false;
-      }
-
-      var view = new DataView(input);
-      var movingByteOffset = 0;
-      var magicNumber = CodecUtils.getString8FromBuffer(input, magicNumberToExpect.length);
-
-      // control 2: the magic number
-      if (magicNumber !== magicNumberToExpect) {
-        console.warn("This file is not of PixBin type. (wrong magic number)");
-        return false;
-      }
-
-      movingByteOffset = magicNumberToExpect.length;
-      var isLittleEndian = view.getUint8(movingByteOffset);
-
-      // control 3: the endianess must be 0 or 1
-      if (isLittleEndian != 0 && isLittleEndian != 1) {
-        console.warn("This file is not of PixBin type. (wrong endianess code)");
-        return false;
-      }
-
-      movingByteOffset += 1;
-      var pixBinIndexBinaryStringByteLength = view.getUint32(movingByteOffset, isLittleEndian);
-      movingByteOffset += 4;
-      var pixBinIndexObj = CodecUtils.ArrayBufferToObject(input.slice(movingByteOffset, movingByteOffset + pixBinIndexBinaryStringByteLength));
-      movingByteOffset += pixBinIndexBinaryStringByteLength;
-
-      this._parsingInfo.offsetToReachFirstBlock = movingByteOffset;
-      this._parsingInfo.isLittleEndian = isLittleEndian;
-      this._binMeta = pixBinIndexObj;
-
-      return true;
-    }
-
-    /**
-    * Fetch a block at the given index. The first time it called on a block,
-    * this block will be read from the stream and decoded.
-    * If a block is already decoded, it will be retrieved as is without trying to
-    * re-decode it, unless `forceDecoding` is `true`.
-    * @param {Number} n - the index of the block to fetch
-    * @param {Boolean} forceDecoding - force the decoding even though it was already decoded
-    * @return {Object} the decoded block, containing `_data_`, `_metadata` and `originalBlockType`
-    */
-
-  }, {
-    key: 'fetchBlock',
-    value: function fetchBlock(n) {
-      var forceDecoding = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
-
-      var nbBlocks = this.getNumberOfBlocks();
-      if (n < 0 || n >= nbBlocks) {
-        console.warn("The block index is out of range.");
-        return null;
-      }
-
-      if (n in this._decodedBlocks && !forceDecoding) {
-        return this._decodedBlocks[n];
-      }
-
-      var offset = this._parsingInfo.offsetToReachFirstBlock;
-
-      for (var i = 0; i < n; i++) {
-        offset += this._binMeta.pixblocksInfo[i].byteLength;
-      }
-
-      var blockInfo = this._binMeta.pixblocksInfo[n];
-      var pixBlockBuff = this._input.slice(offset, offset + blockInfo.byteLength);
-
-      if (this._verifyChecksum && md5$2(pixBlockBuff) !== blockInfo.checksum) {
-        console.warn("The block #" + n + " is corrupted.");
-        return null;
-      }
-
-      var blockDecoder = new PixBlockDecoder();
-      blockDecoder.setInput(pixBlockBuff);
-      blockDecoder.run();
-      var decodedBlock = blockDecoder.getOutput();
-
-      if (!decodedBlock) {
-        console.warn("The block #" + n + " could not be decoded.");
-        return null;
-      }
-
-      this._decodedBlocks[n] = decodedBlock;
-      return decodedBlock;
-    }
-  }]);
-  return PixBinDecoder;
-}(); /* END of class PixBinDecoder */
-
-/*
-* Author    Jonathan Lurie - http://me.jonathanlurie.fr
-*
-* License   MIT
-* Link      https://github.com/Pixpipe/pixpipejs
-* Lab       MCIN - Montreal Neurological Institute
-*/
-
-/**
-* A PixBinEncoder instance takes an Image2D or Image3D as input with `addInput(...)`
-* and encode it so that it can be saved as a *.pixp file.
-* An output filename can be specified using `.setMetadata("filename", "yourName.pixp");`,
-* by default, the name is "untitled.pixp".
-* When `update()` is called, a gzip blog is prepared as output[0] and can then be downloaded
-* when calling the method `.download()`. The gzip blob could also be sent over AJAX
-* using a third party library.
-*
-* **Usage**
-* - [examples/savePixpFile.html](../examples/savePixpFile.html)
-*/
-
-var PixBinEncoder$$1 = function (_Filter) {
-  inherits(PixBinEncoder$$1, _Filter);
-
-  function PixBinEncoder$$1() {
-    classCallCheck(this, PixBinEncoder$$1);
-
-    // define if the encoder should compress the data, default: yes
-    var _this = possibleConstructorReturn(this, (PixBinEncoder$$1.__proto__ || Object.getPrototypeOf(PixBinEncoder$$1)).call(this));
-
-    _this.setMetadata("compress", true);
-
-    // to be transmitted to the encoder
-    _this.setMetadata("description", "no description");
-    _this.setMetadata("madeWith", "Pixpipejs");
-    _this.setMetadata("userObject", null);
-    return _this;
-  }
-
-  /**
-  * [static]
-  * the first sequence of bytes for a pixbin file is this ASCII string
-  */
-
-
-  createClass(PixBinEncoder$$1, [{
-    key: "_run",
-    value: function _run() {
-      var encoder = new PixBinEncoder$1();
-
-      // specifying some options
-      encoder.enableDataCompression(this.getMetadata("compress"));
-      encoder.setOption("userObject", this.getMetadata("userObject"));
-      encoder.setOption("description", this.getMetadata("description"));
-      encoder.setOption("madeWith", this.getMetadata("madeWith"));
-
-      this._forEachInput(function (category, input) {
-        encoder.addInput(input);
-      });
-
-      encoder.run();
-
-      this._output[0] = encoder.getOutput();
-    }
-
-    /**
-    * Download the generated file
-    */
-    /*
-    download(){
-      var output = this.getOutput();
-       if(output){
-        FileSaver.saveAs( this.getOutput(), this.getMetadata("filename"));
-      }else{
-        console.warn("No output computed yet.");
-      }
-    }
-    */
-
-  }], [{
-    key: "MAGIC_NUMBER",
-    value: function MAGIC_NUMBER() {
-      return "PIXPIPE_PIXBIN";
-    }
-  }]);
-  return PixBinEncoder$$1;
-}(Filter); /* END of class PixBinEncoder */
-
-function createCommonjsModule$2(fn, module) {
-  return module = { exports: {} }, fn(module, module.exports), module.exports;
-}
-
-var traverse_1$1 = createCommonjsModule$2(function (module) {
+var traverse_1$1 = createCommonjsModule$1$1(function (module) {
   var traverse = module.exports = function (obj) {
     return new Traverse(obj);
   };
@@ -53052,6 +51725,2092 @@ var CodecUtils$1 = function () {
   return CodecUtils;
 }(); /* END of class CodecUtils */
 
+var asyncGenerator$1$1 = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function wrap(fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function _await(value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
+var classCallCheck$1$1 = function classCallCheck$1(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass$1$1 = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+/*
+* Author    Jonathan Lurie - http://me.jonahanlurie.fr
+*
+* License   MIT
+* Link      https://github.com/jonathanlurie/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+// list of different kinds of data we accept as input
+var dataCases = {
+  invalid: null, // the data is not compatible (Number, String)
+  typedArray: 1, // the data is compatible, as a typed array
+  mixedArrays: 2, // the data is compatible, as an array of typed array
+  complexObject: 3 // a complex object is also compatible (can be a untyped array)
+};
+
+var PixBlockEncoder = function () {
+  function PixBlockEncoder() {
+    classCallCheck$1$1(this, PixBlockEncoder);
+
+    this._compress = false;
+    this.reset();
+  }
+
+  /**
+  * reset inputs and inputs
+  */
+
+  createClass$1$1(PixBlockEncoder, [{
+    key: 'reset',
+    value: function reset() {
+      this._input = null;
+      this._inputCase = null;
+      this._output = null;
+    }
+
+    /**
+    * Set a boolean to secify if data should be compressed or not
+    * @param {Boolean} b - true to compress, false to not compress
+    */
+
+  }, {
+    key: 'enableDataCompression',
+    value: function enableDataCompression(b) {
+      this._compress = b;
+    }
+
+    /**
+    * Specify an input to the encoder
+    * @param {Object} obj - an object candidate, containing a _data and _metadata attributes
+    */
+
+  }, {
+    key: 'setInput',
+    value: function setInput(obj) {
+      this._inputCase = PixBlockEncoder.isGoodCandidate(obj);
+      if (this._inputCase) {
+        this._input = obj;
+      }
+    }
+
+    /**
+    * Get the output
+    * @return {Object} the output, or null
+    */
+
+  }, {
+    key: 'getOutput',
+    value: function getOutput() {
+      return this._output;
+    }
+
+    /**
+    * Check if the given object is a good intput candidate
+    * @param {Object} obj - an object candidate, containing a _data and _metadata attributes
+    * @return {Boolean} true if good candidate, false if not
+    */
+
+  }, {
+    key: 'run',
+
+    /**
+    * Launch the encoding of the block
+    */
+    value: function run() {
+      var input = this._input;
+
+      if (!input || !this._inputCase) {
+        console.warn("An input must be given to the PixBlockEncoder.");
+        return;
+      }
+
+      var data = input._data;
+      var encodedData = null;
+      var compressedData = null;
+
+      var byteStreamInfo = [];
+      var useMultipleDataStreams = false;
+
+      switch (this._inputCase) {
+
+        // The input is a typed array ********************************
+        case dataCases.typedArray:
+          {
+            // no real need to compress the data here
+            encodedData = data;
+            var byteStreamInfoSubset = this._getDataSubsetInfo(data);
+
+            // additional compression flag
+            byteStreamInfoSubset.compressedByteLength = null;
+
+            if (this._compress) {
+              encodedData = pako_1$1.deflate(encodedData.buffer);
+              byteStreamInfoSubset.compressedByteLength = encodedData.byteLength;
+            }
+
+            byteStreamInfo.push(byteStreamInfoSubset);
+          }
+          break;
+
+        // The input is an Array of typed arrays *********************
+        case dataCases.mixedArrays:
+          {
+            useMultipleDataStreams = true;
+            compressedData = [];
+
+            encodedData = new Array(data.length);
+
+            // collect bytestream info for each subset of data
+            for (var i = 0; i < data.length; i++) {
+              var currentDataStream = data[i];
+              var byteStreamInfoSubset = this._getDataSubsetInfo(currentDataStream);
+
+              // if not a typed array, this subset needs further modifications
+              if (!byteStreamInfoSubset.isTypedArray) {
+                currentDataStream = new Uint8Array(CodecUtils$1.objectToArrayBuffer(currentDataStream));
+                byteStreamInfoSubset.byteLength = currentDataStream.byteLength;
+              }
+
+              if (this._compress) {
+                var compressedDataSubset = pako_1$1.deflate(currentDataStream.buffer);
+                byteStreamInfoSubset.compressedByteLength = compressedDataSubset.byteLength;
+                compressedData.push(compressedDataSubset);
+              }
+
+              byteStreamInfo.push(byteStreamInfoSubset);
+
+              encodedData[i] = currentDataStream;
+            }
+
+            if (this._compress) {
+              encodedData = compressedData;
+            }
+          }
+          break;
+
+        // The input is an Array of typed arrays *********************
+        case dataCases.complexObject:
+          {
+            var byteStreamInfoSubset = this._getDataSubsetInfo(data);
+
+            // replace the original data object with this uncompressed serialized version.
+            // We wrap it into a Uint8Array so that we can call .buffer on it, just like all the others
+            encodedData = new Uint8Array(CodecUtils$1.objectToArrayBuffer(data));
+            byteStreamInfoSubset.byteLength = encodedData.byteLength;
+
+            if (this._compress) {
+              encodedData = pako_1$1.deflate(encodedData);
+              byteStreamInfoSubset.compressedByteLength = encodedData.byteLength;
+            }
+
+            byteStreamInfo.push(byteStreamInfoSubset);
+          }
+          break;
+
+        default:
+          console.warn("A problem occured.");
+          return;
+      }
+
+      // the metadata are converted into a buffer
+      var metadataBuffer = CodecUtils$1.objectToArrayBuffer(input._metadata);
+
+      var pixBlockHeader = {
+        byteStreamInfo: byteStreamInfo,
+        useMultipleDataStreams: useMultipleDataStreams,
+        originalBlockType: input.constructor.name,
+        metadataByteLength: metadataBuffer.byteLength
+
+        // converting the pixBlockHeader obj into a buffer
+      };var pixBlockHeaderBuff = CodecUtils$1.objectToArrayBuffer(pixBlockHeader);
+
+      // this list will then be transformed into a single buffer
+      var allBuffers = [
+      // primer, part 1: endianess
+      new Uint8Array([+CodecUtils$1.isPlatformLittleEndian()]).buffer,
+      // primer, part 2: size of the header buff
+      new Uint32Array([pixBlockHeaderBuff.byteLength]).buffer,
+
+      // the header buff
+      pixBlockHeaderBuff,
+
+      // the metadata buffer
+      metadataBuffer];
+
+      // adding the actual encodedData buffer to the list
+      if (useMultipleDataStreams) {
+        for (var i = 0; i < encodedData.length; i++) {
+          allBuffers.push(encodedData[i].buffer);
+        }
+      } else {
+        allBuffers.push(encodedData.buffer);
+      }
+
+      this._output = CodecUtils$1.mergeBuffers(allBuffers);
+    }
+
+    /**
+    * [STATIC]
+    * Give in what case we fall when we want to use this data.
+    * Cases are described at the top
+    * @param {Whatever} data - a piec of data, object, array, typed array...
+    * @return {Number} the case
+    */
+
+  }, {
+    key: '_getDataSubsetInfo',
+
+    /**
+    * [PRIVATE]
+    * Return some infomation about the data subset so that it's easier to parse later
+    * @param {Object} subset - can be a typedArray or a complex object
+    * @return {Object} reconstruction info about this subset
+    */
+    value: function _getDataSubsetInfo(subset) {
+      var infoObj = null;
+
+      if (CodecUtils$1.isTypedArray(subset)) {
+        infoObj = CodecUtils$1.getTypedArrayInfo(subset);
+        infoObj.isTypedArray = true;
+        infoObj.compressedByteLength = null;
+      } else {
+        infoObj = {
+          type: subset.constructor.name,
+          compressedByteLength: null,
+          byteLength: null,
+          length: null,
+          isTypedArray: false
+        };
+      }
+
+      return infoObj;
+    }
+  }], [{
+    key: 'isGoodCandidate',
+    value: function isGoodCandidate(obj) {
+      if (!obj) {
+        console.warn("Input object cannot be null.");
+        return false;
+      }
+
+      if (!("_metadata" in obj)) {
+        console.warn("Input object must contain a _metadata object.");
+        return false;
+      }
+
+      if (!("_data" in obj)) {
+        console.warn("Input object must contain a _data object.");
+        return false;
+      }
+
+      var data = obj._data;
+
+      // check: metadata should not contain cyclic structures
+      try {} catch (e) {
+        console.warn("The metadata object contains cyclic structures. Cannot be used.");
+        return false;
+      }
+
+      var inputCase = PixBlockEncoder.determineDataCase(data);
+
+      // testing the case based on the kinf of data we want to input
+      if (inputCase === dataCases.invalid) {
+        console.warn("The input is invalid.");
+      }
+
+      return inputCase;
+    }
+  }, {
+    key: 'determineDataCase',
+    value: function determineDataCase(data) {
+      if (data instanceof Object) {
+        if (CodecUtils$1.isTypedArray(data)) return dataCases.typedArray;
+
+        /*
+        if( data instanceof Array )
+          if(data.every( function(element){ return CodecUtils.isTypedArray(element) }))
+            return dataCases.mixedArrays;
+        */
+
+        // TODO: change the name of this case, since we want to accept Arrays of whatever
+        if (data instanceof Array) return dataCases.mixedArrays;
+
+        return dataCases.complexObject;
+      } else {
+        return dataCases.invalid;
+      }
+    }
+  }]);
+  return PixBlockEncoder;
+}(); /* END of class PixBlockEncoder */
+
+/*
+* Author    Jonathan Lurie - http://me.jonahanlurie.fr
+*
+* License   MIT
+* Link      https://github.com/jonathanlurie/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+var PixBlockDecoder = function () {
+  function PixBlockDecoder() {
+    classCallCheck$1$1(this, PixBlockDecoder);
+
+    this.reset();
+  }
+
+  /**
+  * reset inputs and inputs
+  */
+
+  createClass$1$1(PixBlockDecoder, [{
+    key: 'reset',
+    value: function reset() {
+      this._input = null;
+      this._output = null;
+    }
+
+    /**
+    * Specify an input
+    * @param {ArrayBuffer} buff - the arraybuffer that contains some data to be deserialized
+    */
+
+  }, {
+    key: 'setInput',
+    value: function setInput(buff) {
+      // check input
+      if (!(buff instanceof ArrayBuffer)) {
+        console.warn("Input should be a valid ArrayBuffer");
+        return;
+      }
+      this._input = buff;
+    }
+
+    /**
+    * Get the output
+    * @return {Object} the output, or null
+    */
+
+  }, {
+    key: 'getOutput',
+    value: function getOutput() {
+      return this._output;
+    }
+
+    /*
+    * Launch the decoding
+    */
+
+  }, {
+    key: 'run',
+    value: function run() {
+
+      var input = this._input;
+      var view = new DataView(input);
+      var isLtlt = view.getUint8(0);
+      var readingByteOffset = 0;
+
+      // primer, part 1
+      // get the endianess used to encode the file
+      var isLittleEndian = view.getUint8(0);
+      readingByteOffset += 1;
+
+      // primer, part 2
+      // get the length of the string buffer (unicode json) that follows
+      var pixBlockHeaderBufferByteLength = view.getUint32(1, readingByteOffset);
+      readingByteOffset += 4;
+
+      // get the string buffer
+      var pixBlockHeaderBuffer = input.slice(readingByteOffset, readingByteOffset + pixBlockHeaderBufferByteLength);
+      var pixBlockHeader = CodecUtils$1.ArrayBufferToObject(pixBlockHeaderBuffer);
+      readingByteOffset += pixBlockHeaderBufferByteLength;
+
+      // fetching the metadata
+      var metadataBuffer = input.slice(readingByteOffset, readingByteOffset + pixBlockHeader.metadataByteLength);
+      var metadataObject = CodecUtils$1.ArrayBufferToObject(metadataBuffer);
+      readingByteOffset += pixBlockHeader.metadataByteLength;
+
+      // the data streams are the byte streams when they are converted back to actual typedArrays/Objects
+      var dataStreams = [];
+
+      for (var i = 0; i < pixBlockHeader.byteStreamInfo.length; i++) {
+        // act as a flag: if not null, it means data were compressed
+        var compressedByteLength = pixBlockHeader.byteStreamInfo[i].compressedByteLength;
+
+        // create a typed array out of the inflated buffer
+        var dataStreamConstructor = this._getDataTypeFromByteStreamInfo(pixBlockHeader.byteStreamInfo[i]);
+
+        // know if it's a typed array or a complex object
+        var isTypedArray = pixBlockHeader.byteStreamInfo[i].isTypedArray;
+
+        // meaning, the stream is compresed
+        if (compressedByteLength) {
+          // fetch the compresed dataStream
+          var compressedByteStream = new Uint8Array(input, readingByteOffset, compressedByteLength);
+
+          // inflate the dataStream
+          var inflatedByteStream = pako_1$1.inflate(compressedByteStream);
+
+          var dataStream = null;
+          /*
+          if( dataStreamConstructor === Object){
+            dataStream = CodecUtils.ArrayBufferToObject( inflatedByteStream.buffer  );
+          }else{
+            dataStream = new dataStreamConstructor( inflatedByteStream.buffer );
+          }
+          */
+
+          if (isTypedArray) {
+            dataStream = new dataStreamConstructor(inflatedByteStream.buffer);
+          } else {
+            dataStream = CodecUtils$1.ArrayBufferToObject(inflatedByteStream.buffer);
+          }
+
+          dataStreams.push(dataStream);
+          readingByteOffset += compressedByteLength;
+        }
+        // the stream were NOT compressed
+        else {
+            var dataStream = null;
+            if (isTypedArray) {
+              dataStream = CodecUtils$1.extractTypedArray(input, readingByteOffset, this._getDataTypeFromByteStreamInfo(pixBlockHeader.byteStreamInfo[i]), pixBlockHeader.byteStreamInfo[i].length);
+            } else {
+              var objectBuffer = CodecUtils$1.extractTypedArray(input, readingByteOffset, Uint8Array, pixBlockHeader.byteStreamInfo[i].byteLength);
+              dataStream = CodecUtils$1.ArrayBufferToObject(objectBuffer.buffer);
+            }
+
+            dataStreams.push(dataStream);
+            readingByteOffset += pixBlockHeader.byteStreamInfo[i].byteLength;
+          }
+      }
+
+      // If data is a single typed array (= not composed of a subset)
+      // we get rid of the useless wrapping array
+      if (!pixBlockHeader.useMultipleDataStreams) {
+        dataStreams = dataStreams[0];
+      }
+
+      this._output = {
+        originalBlockType: pixBlockHeader.originalBlockType,
+        _data: dataStreams,
+        _metadata: metadataObject
+      };
+    }
+
+    /**
+    * Get the array type based on byte stream info.
+    * The returned object can be used as a constructor
+    * @return {Function} constructor of a typed array
+    */
+
+  }, {
+    key: '_getDataTypeFromByteStreamInfo',
+    value: function _getDataTypeFromByteStreamInfo(bsi) {
+      var dataType = "Object";
+      var globalObject = CodecUtils$1.getGlobalObject();
+
+      if (bsi.type === "int") {
+        dataType = bsi.signed ? "Uint" : "Int";
+        dataType += bsi.bytesPerElements * 8 + "Array";
+      } else if (bsi.type === "float") {
+        dataType = "Float";
+        dataType += bsi.bytesPerElements * 8 + "Array";
+        var globalObject = CodecUtils$1.getGlobalObject();
+      }
+
+      return globalObject[dataType];
+    }
+  }]);
+  return PixBlockDecoder;
+}(); /* END of class PixBlockDecoder */
+
+var global$1$1 = typeof global$1 !== "undefined" ? global$1 : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};
+
+// shim for using process in browser
+// based off https://github.com/defunctzombie/node-process/blob/master/browser.js
+
+function defaultSetTimout$1() {
+  throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout$1() {
+  throw new Error('clearTimeout has not been defined');
+}
+var cachedSetTimeout$1 = defaultSetTimout$1;
+var cachedClearTimeout$1 = defaultClearTimeout$1;
+if (typeof global$1$1.setTimeout === 'function') {
+  cachedSetTimeout$1 = setTimeout;
+}
+if (typeof global$1$1.clearTimeout === 'function') {
+  cachedClearTimeout$1 = clearTimeout;
+}
+
+function runTimeout$1(fun) {
+  if (cachedSetTimeout$1 === setTimeout) {
+    //normal enviroments in sane situations
+    return setTimeout(fun, 0);
+  }
+  // if setTimeout wasn't available but was latter defined
+  if ((cachedSetTimeout$1 === defaultSetTimout$1 || !cachedSetTimeout$1) && setTimeout) {
+    cachedSetTimeout$1 = setTimeout;
+    return setTimeout(fun, 0);
+  }
+  try {
+    // when when somebody has screwed with setTimeout but no I.E. maddness
+    return cachedSetTimeout$1(fun, 0);
+  } catch (e) {
+    try {
+      // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+      return cachedSetTimeout$1.call(null, fun, 0);
+    } catch (e) {
+      // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+      return cachedSetTimeout$1.call(this, fun, 0);
+    }
+  }
+}
+function runClearTimeout$1(marker) {
+  if (cachedClearTimeout$1 === clearTimeout) {
+    //normal enviroments in sane situations
+    return clearTimeout(marker);
+  }
+  // if clearTimeout wasn't available but was latter defined
+  if ((cachedClearTimeout$1 === defaultClearTimeout$1 || !cachedClearTimeout$1) && clearTimeout) {
+    cachedClearTimeout$1 = clearTimeout;
+    return clearTimeout(marker);
+  }
+  try {
+    // when when somebody has screwed with setTimeout but no I.E. maddness
+    return cachedClearTimeout$1(marker);
+  } catch (e) {
+    try {
+      // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+      return cachedClearTimeout$1.call(null, marker);
+    } catch (e) {
+      // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+      // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+      return cachedClearTimeout$1.call(this, marker);
+    }
+  }
+}
+var queue$1 = [];
+var draining$1 = false;
+var currentQueue$1;
+var queueIndex$1 = -1;
+
+function cleanUpNextTick$1() {
+  if (!draining$1 || !currentQueue$1) {
+    return;
+  }
+  draining$1 = false;
+  if (currentQueue$1.length) {
+    queue$1 = currentQueue$1.concat(queue$1);
+  } else {
+    queueIndex$1 = -1;
+  }
+  if (queue$1.length) {
+    drainQueue$1();
+  }
+}
+
+function drainQueue$1() {
+  if (draining$1) {
+    return;
+  }
+  var timeout = runTimeout$1(cleanUpNextTick$1);
+  draining$1 = true;
+
+  var len = queue$1.length;
+  while (len) {
+    currentQueue$1 = queue$1;
+    queue$1 = [];
+    while (++queueIndex$1 < len) {
+      if (currentQueue$1) {
+        currentQueue$1[queueIndex$1].run();
+      }
+    }
+    queueIndex$1 = -1;
+    len = queue$1.length;
+  }
+  currentQueue$1 = null;
+  draining$1 = false;
+  runClearTimeout$1(timeout);
+}
+function nextTick$1(fun) {
+  var args = new Array(arguments.length - 1);
+  if (arguments.length > 1) {
+    for (var i = 1; i < arguments.length; i++) {
+      args[i - 1] = arguments[i];
+    }
+  }
+  queue$1.push(new Item$1(fun, args));
+  if (queue$1.length === 1 && !draining$1) {
+    runTimeout$1(drainQueue$1);
+  }
+}
+// v8 likes predictible objects
+function Item$1(fun, array) {
+  this.fun = fun;
+  this.array = array;
+}
+Item$1.prototype.run = function () {
+  this.fun.apply(null, this.array);
+};
+var title$1 = 'browser';
+var platform$1 = 'browser';
+var browser$1 = true;
+var env$1 = {};
+var argv$1 = [];
+var version$1 = ''; // empty string to avoid regexp issues
+var versions$1 = {};
+var release$1 = {};
+var config$1 = {};
+
+function noop$1() {}
+
+var on$1 = noop$1;
+var addListener$1 = noop$1;
+var once$1 = noop$1;
+var off$1 = noop$1;
+var removeListener$1 = noop$1;
+var removeAllListeners$1 = noop$1;
+var emit$1 = noop$1;
+
+function binding$1(name) {
+  throw new Error('process.binding is not supported');
+}
+
+function cwd$1() {
+  return '/';
+}
+function chdir$1(dir) {
+  throw new Error('process.chdir is not supported');
+}
+function umask$1() {
+  return 0;
+}
+
+// from https://github.com/kumavis/browser-process-hrtime/blob/master/index.js
+var performance$2 = global$1$1.performance || {};
+var performanceNow$1 = performance$2.now || performance$2.mozNow || performance$2.msNow || performance$2.oNow || performance$2.webkitNow || function () {
+  return new Date().getTime();
+};
+
+// generate timestamp or delta
+// see http://nodejs.org/api/process.html#process_process_hrtime
+function hrtime$1(previousTimestamp) {
+  var clocktime = performanceNow$1.call(performance$2) * 1e-3;
+  var seconds = Math.floor(clocktime);
+  var nanoseconds = Math.floor(clocktime % 1 * 1e9);
+  if (previousTimestamp) {
+    seconds = seconds - previousTimestamp[0];
+    nanoseconds = nanoseconds - previousTimestamp[1];
+    if (nanoseconds < 0) {
+      seconds--;
+      nanoseconds += 1e9;
+    }
+  }
+  return [seconds, nanoseconds];
+}
+
+var startTime$1 = new Date();
+function uptime$1() {
+  var currentTime = new Date();
+  var dif = currentTime - startTime$1;
+  return dif / 1000;
+}
+
+var process$1 = {
+  nextTick: nextTick$1,
+  title: title$1,
+  browser: browser$1,
+  env: env$1,
+  argv: argv$1,
+  version: version$1,
+  versions: versions$1,
+  on: on$1,
+  addListener: addListener$1,
+  once: once$1,
+  off: off$1,
+  removeListener: removeListener$1,
+  removeAllListeners: removeAllListeners$1,
+  emit: emit$1,
+  binding: binding$1,
+  cwd: cwd$1,
+  chdir: chdir$1,
+  umask: umask$1,
+  hrtime: hrtime$1,
+  platform: platform$1,
+  release: release$1,
+  config: config$1,
+  uptime: uptime$1
+};
+
+var md5$2 = createCommonjsModule$2(function (module) {
+  /**
+   * [js-md5]{@link https://github.com/emn178/js-md5}
+   *
+   * @namespace md5
+   * @version 0.6.1
+   * @author Chen, Yi-Cyuan [emn178@gmail.com]
+   * @copyright Chen, Yi-Cyuan 2014-2017
+   * @license MIT
+   */
+  (function () {
+    'use strict';
+
+    var ERROR = 'input is invalid type';
+    var WINDOW = (typeof window === 'undefined' ? 'undefined' : _typeof(window)) === 'object';
+    var root = WINDOW ? window : {};
+    if (root.JS_MD5_NO_WINDOW) {
+      WINDOW = false;
+    }
+    var WEB_WORKER = !WINDOW && (typeof self === 'undefined' ? 'undefined' : _typeof(self)) === 'object';
+    var NODE_JS = !root.JS_MD5_NO_NODE_JS && (typeof process$1 === 'undefined' ? 'undefined' : _typeof(process$1)) === 'object' && process$1.versions && process$1.versions.node;
+    if (NODE_JS) {
+      root = commonjsGlobal$1;
+    } else if (WEB_WORKER) {
+      root = self;
+    }
+    var COMMON_JS = !root.JS_MD5_NO_COMMON_JS && 'object' === 'object' && module.exports;
+    var AMD = typeof undefined === 'function' && undefined.amd;
+    var ARRAY_BUFFER = !root.JS_MD5_NO_ARRAY_BUFFER && typeof ArrayBuffer !== 'undefined';
+    var HEX_CHARS = '0123456789abcdef'.split('');
+    var EXTRA = [128, 32768, 8388608, -2147483648];
+    var SHIFT = [0, 8, 16, 24];
+    var OUTPUT_TYPES = ['hex', 'array', 'digest', 'buffer', 'arrayBuffer', 'base64'];
+    var BASE64_ENCODE_CHAR = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('');
+
+    var blocks = [],
+        buffer8;
+    if (ARRAY_BUFFER) {
+      var buffer = new ArrayBuffer(68);
+      buffer8 = new Uint8Array(buffer);
+      blocks = new Uint32Array(buffer);
+    }
+
+    if (root.JS_MD5_NO_NODE_JS || !Array.isArray) {
+      Array.isArray = function (obj) {
+        return Object.prototype.toString.call(obj) === '[object Array]';
+      };
+    }
+
+    if (ARRAY_BUFFER && (root.JS_MD5_NO_ARRAY_BUFFER_IS_VIEW || !ArrayBuffer.isView)) {
+      ArrayBuffer.isView = function (obj) {
+        return (typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' && obj.buffer && obj.buffer.constructor === ArrayBuffer;
+      };
+    }
+
+    /**
+     * @method hex
+     * @memberof md5
+     * @description Output hash as hex string
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {String} Hex string
+     * @example
+     * md5.hex('The quick brown fox jumps over the lazy dog');
+     * // equal to
+     * md5('The quick brown fox jumps over the lazy dog');
+     */
+    /**
+     * @method digest
+     * @memberof md5
+     * @description Output hash as bytes array
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {Array} Bytes array
+     * @example
+     * md5.digest('The quick brown fox jumps over the lazy dog');
+     */
+    /**
+     * @method array
+     * @memberof md5
+     * @description Output hash as bytes array
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {Array} Bytes array
+     * @example
+     * md5.array('The quick brown fox jumps over the lazy dog');
+     */
+    /**
+     * @method arrayBuffer
+     * @memberof md5
+     * @description Output hash as ArrayBuffer
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {ArrayBuffer} ArrayBuffer
+     * @example
+     * md5.arrayBuffer('The quick brown fox jumps over the lazy dog');
+     */
+    /**
+     * @method buffer
+     * @deprecated This maybe confuse with Buffer in node.js. Please use arrayBuffer instead.
+     * @memberof md5
+     * @description Output hash as ArrayBuffer
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {ArrayBuffer} ArrayBuffer
+     * @example
+     * md5.buffer('The quick brown fox jumps over the lazy dog');
+     */
+    /**
+     * @method base64
+     * @memberof md5
+     * @description Output hash as base64 string
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {String} base64 string
+     * @example
+     * md5.base64('The quick brown fox jumps over the lazy dog');
+     */
+    var createOutputMethod = function createOutputMethod(outputType) {
+      return function (message) {
+        return new Md5(true).update(message)[outputType]();
+      };
+    };
+
+    /**
+     * @method create
+     * @memberof md5
+     * @description Create Md5 object
+     * @returns {Md5} Md5 object.
+     * @example
+     * var hash = md5.create();
+     */
+    /**
+     * @method update
+     * @memberof md5
+     * @description Create and update Md5 object
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {Md5} Md5 object.
+     * @example
+     * var hash = md5.update('The quick brown fox jumps over the lazy dog');
+     * // equal to
+     * var hash = md5.create();
+     * hash.update('The quick brown fox jumps over the lazy dog');
+     */
+    var createMethod = function createMethod() {
+      var method = createOutputMethod('hex');
+      if (NODE_JS) {
+        method = nodeWrap(method);
+      }
+      method.create = function () {
+        return new Md5();
+      };
+      method.update = function (message) {
+        return method.create().update(message);
+      };
+      for (var i = 0; i < OUTPUT_TYPES.length; ++i) {
+        var type = OUTPUT_TYPES[i];
+        method[type] = createOutputMethod(type);
+      }
+      return method;
+    };
+
+    var nodeWrap = function nodeWrap(method) {
+      var crypto = eval("require('crypto')");
+      var Buffer = eval("require('buffer').Buffer");
+      var nodeMethod = function nodeMethod(message) {
+        if (typeof message === 'string') {
+          return crypto.createHash('md5').update(message, 'utf8').digest('hex');
+        } else {
+          if (message === null || message === undefined) {
+            throw ERROR;
+          } else if (message.constructor === ArrayBuffer) {
+            message = new Uint8Array(message);
+          }
+        }
+        if (Array.isArray(message) || ArrayBuffer.isView(message) || message.constructor === Buffer) {
+          return crypto.createHash('md5').update(new Buffer(message)).digest('hex');
+        } else {
+          return method(message);
+        }
+      };
+      return nodeMethod;
+    };
+
+    /**
+     * Md5 class
+     * @class Md5
+     * @description This is internal class.
+     * @see {@link md5.create}
+     */
+    function Md5(sharedMemory) {
+      if (sharedMemory) {
+        blocks[0] = blocks[16] = blocks[1] = blocks[2] = blocks[3] = blocks[4] = blocks[5] = blocks[6] = blocks[7] = blocks[8] = blocks[9] = blocks[10] = blocks[11] = blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+        this.blocks = blocks;
+        this.buffer8 = buffer8;
+      } else {
+        if (ARRAY_BUFFER) {
+          var buffer = new ArrayBuffer(68);
+          this.buffer8 = new Uint8Array(buffer);
+          this.blocks = new Uint32Array(buffer);
+        } else {
+          this.blocks = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        }
+      }
+      this.h0 = this.h1 = this.h2 = this.h3 = this.start = this.bytes = 0;
+      this.finalized = this.hashed = false;
+      this.first = true;
+    }
+
+    /**
+     * @method update
+     * @memberof Md5
+     * @instance
+     * @description Update hash
+     * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+     * @returns {Md5} Md5 object.
+     * @see {@link md5.update}
+     */
+    Md5.prototype.update = function (message) {
+      if (this.finalized) {
+        return;
+      }
+
+      var notString,
+          type = typeof message === 'undefined' ? 'undefined' : _typeof(message);
+      if (type !== 'string') {
+        if (type === 'object') {
+          if (message === null) {
+            throw ERROR;
+          } else if (ARRAY_BUFFER && message.constructor === ArrayBuffer) {
+            message = new Uint8Array(message);
+          } else if (!Array.isArray(message)) {
+            if (!ARRAY_BUFFER || !ArrayBuffer.isView(message)) {
+              throw ERROR;
+            }
+          }
+        } else {
+          throw ERROR;
+        }
+        notString = true;
+      }
+      var code,
+          index = 0,
+          i,
+          length = message.length,
+          blocks = this.blocks;
+      var buffer8 = this.buffer8;
+
+      while (index < length) {
+        if (this.hashed) {
+          this.hashed = false;
+          blocks[0] = blocks[16];
+          blocks[16] = blocks[1] = blocks[2] = blocks[3] = blocks[4] = blocks[5] = blocks[6] = blocks[7] = blocks[8] = blocks[9] = blocks[10] = blocks[11] = blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+        }
+
+        if (notString) {
+          if (ARRAY_BUFFER) {
+            for (i = this.start; index < length && i < 64; ++index) {
+              buffer8[i++] = message[index];
+            }
+          } else {
+            for (i = this.start; index < length && i < 64; ++index) {
+              blocks[i >> 2] |= message[index] << SHIFT[i++ & 3];
+            }
+          }
+        } else {
+          if (ARRAY_BUFFER) {
+            for (i = this.start; index < length && i < 64; ++index) {
+              code = message.charCodeAt(index);
+              if (code < 0x80) {
+                buffer8[i++] = code;
+              } else if (code < 0x800) {
+                buffer8[i++] = 0xc0 | code >> 6;
+                buffer8[i++] = 0x80 | code & 0x3f;
+              } else if (code < 0xd800 || code >= 0xe000) {
+                buffer8[i++] = 0xe0 | code >> 12;
+                buffer8[i++] = 0x80 | code >> 6 & 0x3f;
+                buffer8[i++] = 0x80 | code & 0x3f;
+              } else {
+                code = 0x10000 + ((code & 0x3ff) << 10 | message.charCodeAt(++index) & 0x3ff);
+                buffer8[i++] = 0xf0 | code >> 18;
+                buffer8[i++] = 0x80 | code >> 12 & 0x3f;
+                buffer8[i++] = 0x80 | code >> 6 & 0x3f;
+                buffer8[i++] = 0x80 | code & 0x3f;
+              }
+            }
+          } else {
+            for (i = this.start; index < length && i < 64; ++index) {
+              code = message.charCodeAt(index);
+              if (code < 0x80) {
+                blocks[i >> 2] |= code << SHIFT[i++ & 3];
+              } else if (code < 0x800) {
+                blocks[i >> 2] |= (0xc0 | code >> 6) << SHIFT[i++ & 3];
+                blocks[i >> 2] |= (0x80 | code & 0x3f) << SHIFT[i++ & 3];
+              } else if (code < 0xd800 || code >= 0xe000) {
+                blocks[i >> 2] |= (0xe0 | code >> 12) << SHIFT[i++ & 3];
+                blocks[i >> 2] |= (0x80 | code >> 6 & 0x3f) << SHIFT[i++ & 3];
+                blocks[i >> 2] |= (0x80 | code & 0x3f) << SHIFT[i++ & 3];
+              } else {
+                code = 0x10000 + ((code & 0x3ff) << 10 | message.charCodeAt(++index) & 0x3ff);
+                blocks[i >> 2] |= (0xf0 | code >> 18) << SHIFT[i++ & 3];
+                blocks[i >> 2] |= (0x80 | code >> 12 & 0x3f) << SHIFT[i++ & 3];
+                blocks[i >> 2] |= (0x80 | code >> 6 & 0x3f) << SHIFT[i++ & 3];
+                blocks[i >> 2] |= (0x80 | code & 0x3f) << SHIFT[i++ & 3];
+              }
+            }
+          }
+        }
+        this.lastByteIndex = i;
+        this.bytes += i - this.start;
+        if (i >= 64) {
+          this.start = i - 64;
+          this.hash();
+          this.hashed = true;
+        } else {
+          this.start = i;
+        }
+      }
+      return this;
+    };
+
+    Md5.prototype.finalize = function () {
+      if (this.finalized) {
+        return;
+      }
+      this.finalized = true;
+      var blocks = this.blocks,
+          i = this.lastByteIndex;
+      blocks[i >> 2] |= EXTRA[i & 3];
+      if (i >= 56) {
+        if (!this.hashed) {
+          this.hash();
+        }
+        blocks[0] = blocks[16];
+        blocks[16] = blocks[1] = blocks[2] = blocks[3] = blocks[4] = blocks[5] = blocks[6] = blocks[7] = blocks[8] = blocks[9] = blocks[10] = blocks[11] = blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+      }
+      blocks[14] = this.bytes << 3;
+      this.hash();
+    };
+
+    Md5.prototype.hash = function () {
+      var a,
+          b,
+          c,
+          d,
+          bc,
+          da,
+          blocks = this.blocks;
+
+      if (this.first) {
+        a = blocks[0] - 680876937;
+        a = (a << 7 | a >>> 25) - 271733879 << 0;
+        d = (-1732584194 ^ a & 2004318071) + blocks[1] - 117830708;
+        d = (d << 12 | d >>> 20) + a << 0;
+        c = (-271733879 ^ d & (a ^ -271733879)) + blocks[2] - 1126478375;
+        c = (c << 17 | c >>> 15) + d << 0;
+        b = (a ^ c & (d ^ a)) + blocks[3] - 1316259209;
+        b = (b << 22 | b >>> 10) + c << 0;
+      } else {
+        a = this.h0;
+        b = this.h1;
+        c = this.h2;
+        d = this.h3;
+        a += (d ^ b & (c ^ d)) + blocks[0] - 680876936;
+        a = (a << 7 | a >>> 25) + b << 0;
+        d += (c ^ a & (b ^ c)) + blocks[1] - 389564586;
+        d = (d << 12 | d >>> 20) + a << 0;
+        c += (b ^ d & (a ^ b)) + blocks[2] + 606105819;
+        c = (c << 17 | c >>> 15) + d << 0;
+        b += (a ^ c & (d ^ a)) + blocks[3] - 1044525330;
+        b = (b << 22 | b >>> 10) + c << 0;
+      }
+
+      a += (d ^ b & (c ^ d)) + blocks[4] - 176418897;
+      a = (a << 7 | a >>> 25) + b << 0;
+      d += (c ^ a & (b ^ c)) + blocks[5] + 1200080426;
+      d = (d << 12 | d >>> 20) + a << 0;
+      c += (b ^ d & (a ^ b)) + blocks[6] - 1473231341;
+      c = (c << 17 | c >>> 15) + d << 0;
+      b += (a ^ c & (d ^ a)) + blocks[7] - 45705983;
+      b = (b << 22 | b >>> 10) + c << 0;
+      a += (d ^ b & (c ^ d)) + blocks[8] + 1770035416;
+      a = (a << 7 | a >>> 25) + b << 0;
+      d += (c ^ a & (b ^ c)) + blocks[9] - 1958414417;
+      d = (d << 12 | d >>> 20) + a << 0;
+      c += (b ^ d & (a ^ b)) + blocks[10] - 42063;
+      c = (c << 17 | c >>> 15) + d << 0;
+      b += (a ^ c & (d ^ a)) + blocks[11] - 1990404162;
+      b = (b << 22 | b >>> 10) + c << 0;
+      a += (d ^ b & (c ^ d)) + blocks[12] + 1804603682;
+      a = (a << 7 | a >>> 25) + b << 0;
+      d += (c ^ a & (b ^ c)) + blocks[13] - 40341101;
+      d = (d << 12 | d >>> 20) + a << 0;
+      c += (b ^ d & (a ^ b)) + blocks[14] - 1502002290;
+      c = (c << 17 | c >>> 15) + d << 0;
+      b += (a ^ c & (d ^ a)) + blocks[15] + 1236535329;
+      b = (b << 22 | b >>> 10) + c << 0;
+      a += (c ^ d & (b ^ c)) + blocks[1] - 165796510;
+      a = (a << 5 | a >>> 27) + b << 0;
+      d += (b ^ c & (a ^ b)) + blocks[6] - 1069501632;
+      d = (d << 9 | d >>> 23) + a << 0;
+      c += (a ^ b & (d ^ a)) + blocks[11] + 643717713;
+      c = (c << 14 | c >>> 18) + d << 0;
+      b += (d ^ a & (c ^ d)) + blocks[0] - 373897302;
+      b = (b << 20 | b >>> 12) + c << 0;
+      a += (c ^ d & (b ^ c)) + blocks[5] - 701558691;
+      a = (a << 5 | a >>> 27) + b << 0;
+      d += (b ^ c & (a ^ b)) + blocks[10] + 38016083;
+      d = (d << 9 | d >>> 23) + a << 0;
+      c += (a ^ b & (d ^ a)) + blocks[15] - 660478335;
+      c = (c << 14 | c >>> 18) + d << 0;
+      b += (d ^ a & (c ^ d)) + blocks[4] - 405537848;
+      b = (b << 20 | b >>> 12) + c << 0;
+      a += (c ^ d & (b ^ c)) + blocks[9] + 568446438;
+      a = (a << 5 | a >>> 27) + b << 0;
+      d += (b ^ c & (a ^ b)) + blocks[14] - 1019803690;
+      d = (d << 9 | d >>> 23) + a << 0;
+      c += (a ^ b & (d ^ a)) + blocks[3] - 187363961;
+      c = (c << 14 | c >>> 18) + d << 0;
+      b += (d ^ a & (c ^ d)) + blocks[8] + 1163531501;
+      b = (b << 20 | b >>> 12) + c << 0;
+      a += (c ^ d & (b ^ c)) + blocks[13] - 1444681467;
+      a = (a << 5 | a >>> 27) + b << 0;
+      d += (b ^ c & (a ^ b)) + blocks[2] - 51403784;
+      d = (d << 9 | d >>> 23) + a << 0;
+      c += (a ^ b & (d ^ a)) + blocks[7] + 1735328473;
+      c = (c << 14 | c >>> 18) + d << 0;
+      b += (d ^ a & (c ^ d)) + blocks[12] - 1926607734;
+      b = (b << 20 | b >>> 12) + c << 0;
+      bc = b ^ c;
+      a += (bc ^ d) + blocks[5] - 378558;
+      a = (a << 4 | a >>> 28) + b << 0;
+      d += (bc ^ a) + blocks[8] - 2022574463;
+      d = (d << 11 | d >>> 21) + a << 0;
+      da = d ^ a;
+      c += (da ^ b) + blocks[11] + 1839030562;
+      c = (c << 16 | c >>> 16) + d << 0;
+      b += (da ^ c) + blocks[14] - 35309556;
+      b = (b << 23 | b >>> 9) + c << 0;
+      bc = b ^ c;
+      a += (bc ^ d) + blocks[1] - 1530992060;
+      a = (a << 4 | a >>> 28) + b << 0;
+      d += (bc ^ a) + blocks[4] + 1272893353;
+      d = (d << 11 | d >>> 21) + a << 0;
+      da = d ^ a;
+      c += (da ^ b) + blocks[7] - 155497632;
+      c = (c << 16 | c >>> 16) + d << 0;
+      b += (da ^ c) + blocks[10] - 1094730640;
+      b = (b << 23 | b >>> 9) + c << 0;
+      bc = b ^ c;
+      a += (bc ^ d) + blocks[13] + 681279174;
+      a = (a << 4 | a >>> 28) + b << 0;
+      d += (bc ^ a) + blocks[0] - 358537222;
+      d = (d << 11 | d >>> 21) + a << 0;
+      da = d ^ a;
+      c += (da ^ b) + blocks[3] - 722521979;
+      c = (c << 16 | c >>> 16) + d << 0;
+      b += (da ^ c) + blocks[6] + 76029189;
+      b = (b << 23 | b >>> 9) + c << 0;
+      bc = b ^ c;
+      a += (bc ^ d) + blocks[9] - 640364487;
+      a = (a << 4 | a >>> 28) + b << 0;
+      d += (bc ^ a) + blocks[12] - 421815835;
+      d = (d << 11 | d >>> 21) + a << 0;
+      da = d ^ a;
+      c += (da ^ b) + blocks[15] + 530742520;
+      c = (c << 16 | c >>> 16) + d << 0;
+      b += (da ^ c) + blocks[2] - 995338651;
+      b = (b << 23 | b >>> 9) + c << 0;
+      a += (c ^ (b | ~d)) + blocks[0] - 198630844;
+      a = (a << 6 | a >>> 26) + b << 0;
+      d += (b ^ (a | ~c)) + blocks[7] + 1126891415;
+      d = (d << 10 | d >>> 22) + a << 0;
+      c += (a ^ (d | ~b)) + blocks[14] - 1416354905;
+      c = (c << 15 | c >>> 17) + d << 0;
+      b += (d ^ (c | ~a)) + blocks[5] - 57434055;
+      b = (b << 21 | b >>> 11) + c << 0;
+      a += (c ^ (b | ~d)) + blocks[12] + 1700485571;
+      a = (a << 6 | a >>> 26) + b << 0;
+      d += (b ^ (a | ~c)) + blocks[3] - 1894986606;
+      d = (d << 10 | d >>> 22) + a << 0;
+      c += (a ^ (d | ~b)) + blocks[10] - 1051523;
+      c = (c << 15 | c >>> 17) + d << 0;
+      b += (d ^ (c | ~a)) + blocks[1] - 2054922799;
+      b = (b << 21 | b >>> 11) + c << 0;
+      a += (c ^ (b | ~d)) + blocks[8] + 1873313359;
+      a = (a << 6 | a >>> 26) + b << 0;
+      d += (b ^ (a | ~c)) + blocks[15] - 30611744;
+      d = (d << 10 | d >>> 22) + a << 0;
+      c += (a ^ (d | ~b)) + blocks[6] - 1560198380;
+      c = (c << 15 | c >>> 17) + d << 0;
+      b += (d ^ (c | ~a)) + blocks[13] + 1309151649;
+      b = (b << 21 | b >>> 11) + c << 0;
+      a += (c ^ (b | ~d)) + blocks[4] - 145523070;
+      a = (a << 6 | a >>> 26) + b << 0;
+      d += (b ^ (a | ~c)) + blocks[11] - 1120210379;
+      d = (d << 10 | d >>> 22) + a << 0;
+      c += (a ^ (d | ~b)) + blocks[2] + 718787259;
+      c = (c << 15 | c >>> 17) + d << 0;
+      b += (d ^ (c | ~a)) + blocks[9] - 343485551;
+      b = (b << 21 | b >>> 11) + c << 0;
+
+      if (this.first) {
+        this.h0 = a + 1732584193 << 0;
+        this.h1 = b - 271733879 << 0;
+        this.h2 = c - 1732584194 << 0;
+        this.h3 = d + 271733878 << 0;
+        this.first = false;
+      } else {
+        this.h0 = this.h0 + a << 0;
+        this.h1 = this.h1 + b << 0;
+        this.h2 = this.h2 + c << 0;
+        this.h3 = this.h3 + d << 0;
+      }
+    };
+
+    /**
+     * @method hex
+     * @memberof Md5
+     * @instance
+     * @description Output hash as hex string
+     * @returns {String} Hex string
+     * @see {@link md5.hex}
+     * @example
+     * hash.hex();
+     */
+    Md5.prototype.hex = function () {
+      this.finalize();
+
+      var h0 = this.h0,
+          h1 = this.h1,
+          h2 = this.h2,
+          h3 = this.h3;
+
+      return HEX_CHARS[h0 >> 4 & 0x0F] + HEX_CHARS[h0 & 0x0F] + HEX_CHARS[h0 >> 12 & 0x0F] + HEX_CHARS[h0 >> 8 & 0x0F] + HEX_CHARS[h0 >> 20 & 0x0F] + HEX_CHARS[h0 >> 16 & 0x0F] + HEX_CHARS[h0 >> 28 & 0x0F] + HEX_CHARS[h0 >> 24 & 0x0F] + HEX_CHARS[h1 >> 4 & 0x0F] + HEX_CHARS[h1 & 0x0F] + HEX_CHARS[h1 >> 12 & 0x0F] + HEX_CHARS[h1 >> 8 & 0x0F] + HEX_CHARS[h1 >> 20 & 0x0F] + HEX_CHARS[h1 >> 16 & 0x0F] + HEX_CHARS[h1 >> 28 & 0x0F] + HEX_CHARS[h1 >> 24 & 0x0F] + HEX_CHARS[h2 >> 4 & 0x0F] + HEX_CHARS[h2 & 0x0F] + HEX_CHARS[h2 >> 12 & 0x0F] + HEX_CHARS[h2 >> 8 & 0x0F] + HEX_CHARS[h2 >> 20 & 0x0F] + HEX_CHARS[h2 >> 16 & 0x0F] + HEX_CHARS[h2 >> 28 & 0x0F] + HEX_CHARS[h2 >> 24 & 0x0F] + HEX_CHARS[h3 >> 4 & 0x0F] + HEX_CHARS[h3 & 0x0F] + HEX_CHARS[h3 >> 12 & 0x0F] + HEX_CHARS[h3 >> 8 & 0x0F] + HEX_CHARS[h3 >> 20 & 0x0F] + HEX_CHARS[h3 >> 16 & 0x0F] + HEX_CHARS[h3 >> 28 & 0x0F] + HEX_CHARS[h3 >> 24 & 0x0F];
+    };
+
+    /**
+     * @method toString
+     * @memberof Md5
+     * @instance
+     * @description Output hash as hex string
+     * @returns {String} Hex string
+     * @see {@link md5.hex}
+     * @example
+     * hash.toString();
+     */
+    Md5.prototype.toString = Md5.prototype.hex;
+
+    /**
+     * @method digest
+     * @memberof Md5
+     * @instance
+     * @description Output hash as bytes array
+     * @returns {Array} Bytes array
+     * @see {@link md5.digest}
+     * @example
+     * hash.digest();
+     */
+    Md5.prototype.digest = function () {
+      this.finalize();
+
+      var h0 = this.h0,
+          h1 = this.h1,
+          h2 = this.h2,
+          h3 = this.h3;
+      return [h0 & 0xFF, h0 >> 8 & 0xFF, h0 >> 16 & 0xFF, h0 >> 24 & 0xFF, h1 & 0xFF, h1 >> 8 & 0xFF, h1 >> 16 & 0xFF, h1 >> 24 & 0xFF, h2 & 0xFF, h2 >> 8 & 0xFF, h2 >> 16 & 0xFF, h2 >> 24 & 0xFF, h3 & 0xFF, h3 >> 8 & 0xFF, h3 >> 16 & 0xFF, h3 >> 24 & 0xFF];
+    };
+
+    /**
+     * @method array
+     * @memberof Md5
+     * @instance
+     * @description Output hash as bytes array
+     * @returns {Array} Bytes array
+     * @see {@link md5.array}
+     * @example
+     * hash.array();
+     */
+    Md5.prototype.array = Md5.prototype.digest;
+
+    /**
+     * @method arrayBuffer
+     * @memberof Md5
+     * @instance
+     * @description Output hash as ArrayBuffer
+     * @returns {ArrayBuffer} ArrayBuffer
+     * @see {@link md5.arrayBuffer}
+     * @example
+     * hash.arrayBuffer();
+     */
+    Md5.prototype.arrayBuffer = function () {
+      this.finalize();
+
+      var buffer = new ArrayBuffer(16);
+      var blocks = new Uint32Array(buffer);
+      blocks[0] = this.h0;
+      blocks[1] = this.h1;
+      blocks[2] = this.h2;
+      blocks[3] = this.h3;
+      return buffer;
+    };
+
+    /**
+     * @method buffer
+     * @deprecated This maybe confuse with Buffer in node.js. Please use arrayBuffer instead.
+     * @memberof Md5
+     * @instance
+     * @description Output hash as ArrayBuffer
+     * @returns {ArrayBuffer} ArrayBuffer
+     * @see {@link md5.buffer}
+     * @example
+     * hash.buffer();
+     */
+    Md5.prototype.buffer = Md5.prototype.arrayBuffer;
+
+    /**
+     * @method base64
+     * @memberof Md5
+     * @instance
+     * @description Output hash as base64 string
+     * @returns {String} base64 string
+     * @see {@link md5.base64}
+     * @example
+     * hash.base64();
+     */
+    Md5.prototype.base64 = function () {
+      var v1,
+          v2,
+          v3,
+          base64Str = '',
+          bytes = this.array();
+      for (var i = 0; i < 15;) {
+        v1 = bytes[i++];
+        v2 = bytes[i++];
+        v3 = bytes[i++];
+        base64Str += BASE64_ENCODE_CHAR[v1 >>> 2] + BASE64_ENCODE_CHAR[(v1 << 4 | v2 >>> 4) & 63] + BASE64_ENCODE_CHAR[(v2 << 2 | v3 >>> 6) & 63] + BASE64_ENCODE_CHAR[v3 & 63];
+      }
+      v1 = bytes[i];
+      base64Str += BASE64_ENCODE_CHAR[v1 >>> 2] + BASE64_ENCODE_CHAR[v1 << 4 & 63] + '==';
+      return base64Str;
+    };
+
+    var exports = createMethod();
+
+    if (COMMON_JS) {
+      module.exports = exports;
+    } else {
+      /**
+       * @method md5
+       * @description Md5 hash function, export to global in browsers.
+       * @param {String|Array|Uint8Array|ArrayBuffer} message message to hash
+       * @returns {String} md5 hashes
+       * @example
+       * md5(''); // d41d8cd98f00b204e9800998ecf8427e
+       * md5('The quick brown fox jumps over the lazy dog'); // 9e107d9d372bb6826bd81d3542a419d6
+       * md5('The quick brown fox jumps over the lazy dog.'); // e4d909c290d0fb1ca068ffaddf22cbd0
+       *
+       * // It also supports UTF-8 encoding
+       * md5('中文'); // a7bac2239fcdcb3a067903d8077c4a07
+       *
+       * // It also supports byte `Array`, `Uint8Array`, `ArrayBuffer`
+       * md5([]); // d41d8cd98f00b204e9800998ecf8427e
+       * md5(new Uint8Array([])); // d41d8cd98f00b204e9800998ecf8427e
+       */
+      root.md5 = exports;
+      if (AMD) {
+        undefined(function () {
+          return exports;
+        });
+      }
+    }
+  })();
+});
+
+/*
+* Author    Jonathan Lurie - http://me.jonahanlurie.fr
+*
+* License   MIT
+* Link      https://github.com/jonathanlurie/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* A PixBinEncoder instance takes an Image2D or Image3D as input with `addInput(...)`
+* and encode it so that it can be saved as a *.pixp file.
+* An output filename can be specified using `.setMetadata("filename", "yourName.pixp");`,
+* by default, the name is "untitled.pixp".
+* When `update()` is called, a gzip blog is prepared as output[0] and can then be downloaded
+* when calling the method `.download()`. The gzip blob could also be sent over AJAX
+* using a third party library.
+*
+* **Usage**
+* - [examples/savePixpFile.html](../examples/savePixpFile.html)
+*/
+
+var PixBinEncoder$1 = function () {
+  function PixBinEncoder() {
+    classCallCheck$1$1(this, PixBinEncoder);
+
+    this._compress = true;
+    this.reset();
+  }
+
+  /**
+  * [static]
+  * the first sequence of bytes for a pixbin file is this ASCII string
+  */
+
+  createClass$1$1(PixBinEncoder, [{
+    key: 'reset',
+
+    /**
+    * [PRIVATE]
+    * reset inputs and inputs
+    */
+    value: function reset() {
+      this._inputs = [];
+      this._output = null;
+      this._options = {
+        madeWith: "pixbincodec_js",
+        userObject: null,
+        description: null
+      };
+    }
+
+    /**
+    * Set a boolean to secify if data should be compressed or not
+    * @param {Boolean} b - true to compress, false to not compress
+    */
+
+  }, {
+    key: 'enableDataCompression',
+    value: function enableDataCompression(b) {
+      this._compress = b;
+    }
+
+    /**
+    * Overwrite one of the default options.
+    * @param {String} optionName - one of "madeWith" (default: "pixbincodec_js"), "userObject" (default: null), "description" (default: null)
+    */
+
+  }, {
+    key: 'setOption',
+    value: function setOption(optionName, value) {
+      if (optionName in this._options) {
+        this._options[optionName] = value;
+      }
+    }
+
+    /**
+    * Add an input. Multiple inputs can be added.
+    * @param {Object} obj - an object that comtain _data and _metadata
+    */
+
+  }, {
+    key: 'addInput',
+    value: function addInput(obj) {
+      if (PixBlockEncoder.isGoodCandidate(obj)) {
+        this._inputs.push(obj);
+      }
+    }
+
+    /**
+    * Get the output
+    * @return {ArrayBuffer} the encoded data as a buffer
+    */
+
+  }, {
+    key: 'getOutput',
+    value: function getOutput() {
+      return this._output;
+    }
+
+    /**
+    * Launch the encoding
+    */
+
+  }, {
+    key: 'run',
+    value: function run() {
+      if (!this._inputs.length) {
+        console.warn("The encoder must be specified at least one input.");
+        return;
+      }
+
+      var that = this;
+      var today = new Date();
+      var isLittleEndian = CodecUtils$1.isPlatformLittleEndian();
+      var blockEncoder = new PixBlockEncoder();
+
+      // this object is the JSON description at the begining of a PixBin
+      var pixBinIndex = {
+        date: today.toISOString(),
+        createdWith: this._options.madeWith,
+        description: this._options.description,
+        userObject: this._options.userObject,
+        pixblocksInfo: []
+
+        // array of binary blocks (each are Uint8Array or ArrayBuffer)
+      };var pixBlocks = [];
+
+      // just a convenient shortcut
+      var pixblocksInfo = pixBinIndex.pixblocksInfo;
+
+      this._inputs.forEach(function (input, index) {
+        blockEncoder.setInput(input);
+        blockEncoder.enableDataCompression(that._compress);
+        blockEncoder.run();
+
+        var encodedBlock = blockEncoder.getOutput();
+
+        if (!encodedBlock) {
+          console.warn("The input of index " + index + " could not be encoded as a PixBlock.");
+          return;
+        }
+
+        // adding an entry to the PixBin index
+        var pixBinIndexEntry = {
+          type: input.constructor.name,
+          description: "description" in input._metadata ? input._metadata.description : null,
+          byteLength: encodedBlock.byteLength,
+          checksum: md5$2(encodedBlock)
+        };
+
+        pixblocksInfo.push(pixBinIndexEntry);
+        pixBlocks.push(encodedBlock);
+      });
+
+      if (!pixBlocks.length) {
+        console.warn("No input was compatible for PixBlock encoding.");
+      }
+
+      // Building the header ArrayBuffer of the file. It contains:
+      // - A ASCII string "pixpipe". 7 x Uint8 of charcodes (7 bytes)
+      // - A flag for encoding endianess, 0: big, 1: little. 1 x Uint8 (1 byte)
+      // - The byte length of the PixBin meta binary object. 1 x Uint32 (4 bytes)
+
+      // encoding the meta object into an ArrayBuffer
+      var pixBinIndexBinaryString = CodecUtils$1.objectToArrayBuffer(pixBinIndex);
+      var magicNumber = PixBinEncoder.MAGIC_NUMBER();
+
+      // the +5 stands for 1 endiannes byte (Uint8) + 4 bytes (1xUint32) of header length
+      var binPrimer = new ArrayBuffer(magicNumber.length + 5);
+      var binPrimerView = new DataView(binPrimer);
+
+      CodecUtils$1.setString8InBuffer(magicNumber, binPrimer);
+      binPrimerView.setUint8(magicNumber.length, +isLittleEndian);
+      binPrimerView.setUint32(magicNumber.length + 1, pixBinIndexBinaryString.byteLength, isLittleEndian);
+
+      var allBuffers = [binPrimer, pixBinIndexBinaryString].concat(pixBlocks);
+      this._output = CodecUtils$1.mergeBuffers(allBuffers);
+    }
+  }], [{
+    key: 'MAGIC_NUMBER',
+    value: function MAGIC_NUMBER() {
+      return "PIXPIPE_PIXBIN";
+    }
+  }]);
+  return PixBinEncoder;
+}(); /* END of class PixBinEncoder */
+
+/*
+* Author    Jonathan Lurie - http://me.jonahanlurie.fr
+*
+* License   MIT
+* Link      https://github.com/jonathanlurie/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* A PixBinDecoder instance decodes a *.pixp file and output an Image2D or Image3D.
+* The input, specified by `.addInput(...)` must be an ArrayBuffer
+* (from an `UrlToArrayBufferFilter`, an `UrlToArrayBufferReader` or anothrer source ).
+*
+* **Usage**
+* - [examples/pixpFileToImage2D.html](../examples/pixpFileToImage2D.html)
+*/
+
+var PixBinDecoder = function () {
+  function PixBinDecoder() {
+    classCallCheck$1$1(this, PixBinDecoder);
+
+    this._verifyChecksum = false;
+    this._input = null;
+    this._output = null;
+    this._binMeta = null;
+    this._parsingInfo = {
+      offsetToReachFirstBlock: -1,
+      isLittleEndian: -1
+    };
+
+    this._decodedBlocks = {};
+    this._isValid = false;
+    this.reset();
+  }
+
+  /**
+  * Specify an input
+  * @param {ArrayBuffer} buff - the input
+  */
+
+  createClass$1$1(PixBinDecoder, [{
+    key: 'setInput',
+    value: function setInput(buff) {
+      this.reset();
+
+      if (buff instanceof ArrayBuffer) {
+        this._input = buff;
+        this._isValid = this._parseIndex();
+      }
+    }
+
+    /**
+    * To be called after setInput. Tells if the buffer loaded is valid or not.
+    * @return {Boolean} true if valid, false if not.
+    */
+
+  }, {
+    key: 'isValid',
+    value: function isValid() {
+      return this._isValid;
+    }
+
+    /**
+    * Get the the decoded output
+    * @return {Object} a decoded object
+    */
+
+  }, {
+    key: 'getOutput',
+    value: function getOutput() {
+      return this._output;
+    }
+
+    /**
+    * Get the number of blocks encoded in this PixBin file
+    * @return {Number}
+    */
+
+  }, {
+    key: 'getNumberOfBlocks',
+    value: function getNumberOfBlocks() {
+      return this._binMeta.pixblocksInfo.length;
+    }
+
+    /**
+    * Get the creation date of the file in the ISO8601 format
+    * @return {String} the data
+    */
+
+  }, {
+    key: 'getBinCreationDate',
+    value: function getBinCreationDate() {
+      return this._binMeta.date;
+    }
+
+    /**
+    * Get the description of the PixBin file
+    * @return {String} the description
+    */
+
+  }, {
+    key: 'getBinDescription',
+    value: function getBinDescription() {
+      return this._binMeta.description;
+    }
+
+    /**
+    * The userObject is a generic container added to the PixBin. It can carry all sorts of data.
+    * If not specified during encoding, it's null.
+    * @return {Object} the userObject
+    */
+
+  }, {
+    key: 'getBinUserObject',
+    value: function getBinUserObject() {
+      return this._binMeta.userObject;
+    }
+
+    /**
+    * Get the description of the block at the given index
+    * @param {Number} n - the index of the block
+    * @return {String} the description of this block
+    */
+
+  }, {
+    key: 'getBlockDescription',
+    value: function getBlockDescription(n) {
+      if (n < 0 || n >= this.getNumberOfBlocks()) {
+        console.warn("The block index is out of range.");
+        return null;
+      }
+      return this._binMeta.pixblocksInfo[n].description;
+    }
+
+    /**
+    * Get the original type of the block. Convenient for knowing how to rebuild
+    * the object in its original form.
+    * @param {Number} n - the index of the block
+    * @return {String} the type ( comes from constructor.name )
+    */
+
+  }, {
+    key: 'getBlockType',
+    value: function getBlockType(n) {
+      if (n < 0 || n >= this.getNumberOfBlocks()) {
+        console.warn("The block index is out of range.");
+        return null;
+      }
+      return this._binMeta.pixblocksInfo[n].type;
+    }
+
+    /**
+    * reset I/O and data to query 
+    */
+
+  }, {
+    key: 'reset',
+    value: function reset() {
+      this._isValid = false;
+      this._input = null;
+      this._output = null;
+      this._binMeta = null;
+      this._parsingInfo = {
+        offsetToReachFirstBlock: -1,
+        isLittleEndian: -1
+      };
+      this._decodedBlocks = {};
+    }
+
+    /**
+    * Specify wether or not  the bin decoder must perform a checksum verification
+    * for each block to be decoded.
+    * @param {Boolean} b - true to perfom verification, false to skip it (default: false)
+    */
+
+  }, {
+    key: 'enableBlockVerification',
+    value: function enableBlockVerification(b) {
+      this._verifyChecksum = b;
+    }
+
+    /**
+    * [PRIVATE]
+    * 
+    */
+
+  }, {
+    key: '_parseIndex',
+    value: function _parseIndex() {
+      var input = this._input;
+
+      if (!input) {
+        console.warn("Input cannot be null");
+        return false;
+      }
+
+      var inputByteLength = input.byteLength;
+      var magicNumberToExpect = PixBinEncoder$1.MAGIC_NUMBER();
+
+      // control 1: the file must be large enough
+      if (inputByteLength < magicNumberToExpect.length + 5) {
+        console.warn("This buffer does not match a PixBin file.");
+        return false;
+      }
+
+      var view = new DataView(input);
+      var movingByteOffset = 0;
+      var magicNumber = CodecUtils$1.getString8FromBuffer(input, magicNumberToExpect.length);
+
+      // control 2: the magic number
+      if (magicNumber !== magicNumberToExpect) {
+        console.warn("This file is not of PixBin type. (wrong magic number)");
+        return false;
+      }
+
+      movingByteOffset = magicNumberToExpect.length;
+      var isLittleEndian = view.getUint8(movingByteOffset);
+
+      // control 3: the endianess must be 0 or 1
+      if (isLittleEndian != 0 && isLittleEndian != 1) {
+        console.warn("This file is not of PixBin type. (wrong endianess code)");
+        return false;
+      }
+
+      movingByteOffset += 1;
+      var pixBinIndexBinaryStringByteLength = view.getUint32(movingByteOffset, isLittleEndian);
+      movingByteOffset += 4;
+      var pixBinIndexObj = CodecUtils$1.ArrayBufferToObject(input.slice(movingByteOffset, movingByteOffset + pixBinIndexBinaryStringByteLength));
+      movingByteOffset += pixBinIndexBinaryStringByteLength;
+
+      this._parsingInfo.offsetToReachFirstBlock = movingByteOffset;
+      this._parsingInfo.isLittleEndian = isLittleEndian;
+      this._binMeta = pixBinIndexObj;
+
+      return true;
+    }
+
+    /**
+    * Fetch a block at the given index. The first time it called on a block,
+    * this block will be read from the stream and decoded.
+    * If a block is already decoded, it will be retrieved as is without trying to
+    * re-decode it, unless `forceDecoding` is `true`.
+    * @param {Number} n - the index of the block to fetch
+    * @param {Boolean} forceDecoding - force the decoding even though it was already decoded
+    * @return {Object} the decoded block, containing `_data_`, `_metadata` and `originalBlockType`
+    */
+
+  }, {
+    key: 'fetchBlock',
+    value: function fetchBlock(n) {
+      var forceDecoding = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+
+      var nbBlocks = this.getNumberOfBlocks();
+      if (n < 0 || n >= nbBlocks) {
+        console.warn("The block index is out of range.");
+        return null;
+      }
+
+      if (n in this._decodedBlocks && !forceDecoding) {
+        return this._decodedBlocks[n];
+      }
+
+      var offset = this._parsingInfo.offsetToReachFirstBlock;
+
+      for (var i = 0; i < n; i++) {
+        offset += this._binMeta.pixblocksInfo[i].byteLength;
+      }
+
+      var blockInfo = this._binMeta.pixblocksInfo[n];
+      var pixBlockBuff = this._input.slice(offset, offset + blockInfo.byteLength);
+
+      if (this._verifyChecksum && md5$2(pixBlockBuff) !== blockInfo.checksum) {
+        console.warn("The block #" + n + " is corrupted.");
+        return null;
+      }
+
+      var blockDecoder = new PixBlockDecoder();
+      blockDecoder.setInput(pixBlockBuff);
+      blockDecoder.run();
+      var decodedBlock = blockDecoder.getOutput();
+
+      if (!decodedBlock) {
+        console.warn("The block #" + n + " could not be decoded.");
+        return null;
+      }
+
+      this._decodedBlocks[n] = decodedBlock;
+      return decodedBlock;
+    }
+  }]);
+  return PixBinDecoder;
+}(); /* END of class PixBinDecoder */
+
+/*
+* Author    Jonathan Lurie - http://me.jonathanlurie.fr
+*
+* License   MIT
+* Link      https://github.com/Pixpipe/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* A PixBinEncoder instance takes an Image2D or Image3D as input with `addInput(...)`
+* and encode it so that it can be saved as a *.pixp file.
+* An output filename can be specified using `.setMetadata("filename", "yourName.pixp");`,
+* by default, the name is "untitled.pixp".
+* When `update()` is called, a gzip blog is prepared as output[0] and can then be downloaded
+* when calling the method `.download()`. The gzip blob could also be sent over AJAX
+* using a third party library.
+*
+* **Usage**
+* - [examples/savePixpFile.html](../examples/savePixpFile.html)
+*/
+
+var PixBinEncoder$$1 = function (_Filter) {
+  inherits(PixBinEncoder$$1, _Filter);
+
+  function PixBinEncoder$$1() {
+    classCallCheck(this, PixBinEncoder$$1);
+
+    // define if the encoder should compress the data, default: yes
+    var _this = possibleConstructorReturn(this, (PixBinEncoder$$1.__proto__ || Object.getPrototypeOf(PixBinEncoder$$1)).call(this));
+
+    _this.setMetadata("compress", true);
+
+    // to be transmitted to the encoder
+    _this.setMetadata("description", "no description");
+    _this.setMetadata("madeWith", "Pixpipejs");
+    _this.setMetadata("userObject", null);
+    return _this;
+  }
+
+  /**
+  * [static]
+  * the first sequence of bytes for a pixbin file is this ASCII string
+  */
+
+
+  createClass(PixBinEncoder$$1, [{
+    key: "_run",
+    value: function _run() {
+      var encoder = new PixBinEncoder$1();
+
+      // specifying some options
+      encoder.enableDataCompression(this.getMetadata("compress"));
+      encoder.setOption("userObject", this.getMetadata("userObject"));
+      encoder.setOption("description", this.getMetadata("description"));
+      encoder.setOption("madeWith", this.getMetadata("madeWith"));
+
+      this._forEachInput(function (category, input) {
+        encoder.addInput(input);
+      });
+
+      encoder.run();
+
+      this._output[0] = encoder.getOutput();
+    }
+
+    /**
+    * Download the generated file
+    */
+    /*
+    download(){
+      var output = this.getOutput();
+       if(output){
+        FileSaver.saveAs( this.getOutput(), this.getMetadata("filename"));
+      }else{
+        console.warn("No output computed yet.");
+      }
+    }
+    */
+
+  }], [{
+    key: "MAGIC_NUMBER",
+    value: function MAGIC_NUMBER() {
+      return "PIXPIPE_PIXBIN";
+    }
+  }]);
+  return PixBinEncoder$$1;
+}(Filter); /* END of class PixBinEncoder */
+
 /*
 * Author    Jonathan Lurie - http://me.jonathanlurie.fr
 *
@@ -53124,7 +53883,7 @@ var PixBinDecoder$1 = function (_Filter) {
         }
         // Fallback on a not-pixpipe type
         else {
-            var globalObject = CodecUtils$1.getGlobalObject();
+            var globalObject = CodecUtils.getGlobalObject();
             if (blockType in globalObject) {
               output = new globalObject[blockType]();
               output._metadata = block._metadata;
@@ -55764,6 +56523,2586 @@ var Image2DGenericDecoder = function (_Filter) {
   return Image2DGenericDecoder;
 }(Filter); /* END of class Image2DGenericDecoder */
 
+var asyncGenerator$3 = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function wrap(fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function _await(value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
+var classCallCheck$3 = function classCallCheck(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass$3 = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+/**
+* MniObjParser is a parser of mniobj surface files. This version is an atempt of
+* making a free from dependency independant module. It is based on the code witten
+* by Nicolas Kassis and Tarek Sherif for BrainBrowser
+* (https://brainbrowser.cbrain.mcgill.ca).
+*
+* Since mniobj file can be huge, it may be a good idea to call that froma worker.
+*
+* @author: Jonathan Lurie (github.com/jonathanlurie)
+* @author: Nicolas Kassis
+* @author: Tarek Sherif
+*/
+
+var MniObjParser = function () {
+
+  /**
+  * Constructor of the MniObjParser.
+  */
+  function MniObjParser() {
+    classCallCheck$3(this, MniObjParser);
+
+    this._stack = null;
+    this._stackIndex = null;
+    this._tempResult = null;
+    this._shapeData = null;
+  }
+
+  /**
+  * Copy an existing MniObjParser instance.
+  * This is particularly usefull in the context of a worker, if an MniObjParser
+  * is returned, it is using a JSON format to transfer, meaning all the methods
+  * are lost and only remains the data. This is to rebuild a proper MniObjParser.
+  * @param {MniObjParser} MniObjParserInstance - the instance to copy the data from.
+  */
+
+  createClass$3(MniObjParser, [{
+    key: "copy",
+    value: function copy(MniObjParserInstance) {
+      this._stack = MniObjParserInstance._stack;
+      this._stackIndex = MniObjParserInstance._stackIndex;
+      this._tempResult = MniObjParserInstance._tempResult;
+      this._shapeData = MniObjParserInstance._shapeData;
+    }
+
+    /**
+    * Parse the nmiobj string.
+    * @param {String} objString - This string is obviously taken out of a obj file
+    */
+
+  }, {
+    key: "parse",
+    value: function parse(objString) {
+      try {
+        this._parseRawData(objString);
+        this._arrangeData();
+      } catch (e) {
+        console.warn("MNI OBJ file is invalid.");
+        console.warn(e);
+      }
+    }
+
+    /**
+    * Parse a obj string
+    * @param {String} objString - content of the obj file
+    */
+
+  }, {
+    key: "_parseRawData",
+    value: function _parseRawData(objString) {
+      this._stack = objString.trim().split(/\s+/).reverse();
+      this._stackIndex = this._stack.length - 1;
+      this._tempResult = {};
+
+      var objectClass = this._popStack();
+      var start, end, nitems;
+      var indices, endIndices;
+      var lineIndices = null;
+      var lineIndexSize, lineIndexCounter;
+
+      this._tempResult.type = objectClass === "P" ? "polygon" : objectClass === "L" ? "line" : objectClass;
+
+      if (this._tempResult.type === "polygon") {
+        this._parseSurfProp();
+        this._tempResult.numVertices = parseInt(this._popStack(), 10);
+        this._parseVertices();
+        this._parseNormals();
+        this._tempResult.nitems = parseInt(this._popStack(), 10);
+      } else if (this._tempResult.type === "line") {
+        this._parseSurfProp();
+        this._tempResult.numVertices = parseInt(this._popStack(), 10);
+        this._parseVertices();
+        this._tempResult.nitems = parseInt(this._popStack(), 10);
+      } else {
+        this._tempResult.error = true;
+        this._tempResult.errorMessage = 'Invalid MNI Object class: must be "polygon" or "line"';
+        return;
+      }
+
+      this._parseColors();
+      this._parseEndIndices();
+      this._parseIndices();
+
+      if (this._tempResult.type === "polygon") {} else if (this._tempResult.type === "line") {
+        indices = this._tempResult.indices;
+        endIndices = this._tempResult.endIndices;
+        nitems = this._tempResult.nitems;
+        lineIndexSize = lineIndexCounter = 0;
+
+        for (var i = 0; i < nitems; i++) {
+          if (i === 0) {
+            start = 0;
+          } else {
+            start = endIndices[i - 1];
+          }
+
+          end = endIndices[i];
+          lineIndexSize += (end - start - 1) * 2;
+        }
+
+        lineIndices = new Uint32Array(lineIndexSize);
+
+        for (var i = 0; i < nitems; i++) {
+          if (i === 0) {
+            start = 0;
+          } else {
+            start = endIndices[i - 1];
+          }
+
+          lineIndices[lineIndexCounter++] = indices[start];
+          end = endIndices[i];
+
+          for (var j = start + 1; j < end - 1; j++) {
+            lineIndices[lineIndexCounter++] = indices[j];
+            lineIndices[lineIndexCounter++] = indices[j];
+          }
+
+          lineIndices[lineIndexCounter++] = indices[end - 1];
+        }
+
+        this._tempResult.indices = lineIndices;
+      }
+    }
+
+    /**
+    * [PRIVATE]
+    * Rearange the data from _tempResult to _shapeData
+    */
+
+  }, {
+    key: "_arrangeData",
+    value: function _arrangeData() {
+
+      this._shapeData = {
+        type: this._tempResult.type,
+        vertices: this._tempResult.vertices,
+        normals: this._tempResult.normals,
+        colors: this._tempResult.colors,
+        surfaceProperties: this._tempResult.surfaceProperties,
+        error: this._tempResult.error,
+        errorMessage: this._tempResult.errorMessage
+      };
+
+      var transfer = [this._shapeData.vertices.buffer, this._shapeData.colors.buffer];
+
+      if (this._shapeData.normals) {
+        transfer.push(this._shapeData.normals.buffer);
+      }
+
+      this._shapeData.shapes = this._tempResult.indices;
+
+      transfer.push(this._tempResult.indices.buffer);
+
+      // unroll colors if necessary
+      if (this._shapeData.colors.length === 4) {
+        this._unrollColors();
+      }
+    }
+
+    /**
+    * [PRIVATE]
+    * From a single color, make a typed array (Uint8) of colors.
+    */
+
+  }, {
+    key: "_unrollColors",
+    value: function _unrollColors() {
+      var dataColor0, dataColor1, dataColor2, dataColor3;
+      var nbTriangles = this._shapeData.vertices.length / 3;
+      var arraySize = nbTriangles * 4;
+      var unrolledColors = new Uint8Array(arraySize);
+
+      dataColor0 = this._shapeData.colors[0];
+      dataColor1 = this._shapeData.colors[1];
+      dataColor2 = this._shapeData.colors[2];
+      dataColor3 = this._shapeData.colors[3];
+
+      for (var i = 0; i < arraySize; i += 4) {
+        unrolledColors[i] = dataColor0 * 255;
+        unrolledColors[i + 1] = dataColor1 * 255;
+        unrolledColors[i + 2] = dataColor2 * 255;
+        unrolledColors[i + 3] = dataColor3 * 255;
+      }
+
+      this._shapeData.colors = unrolledColors;
+    }
+
+    /**
+    * [PRIVATE]
+    * Parse surface properties from the raw data.
+    */
+
+  }, {
+    key: "_parseSurfProp",
+    value: function _parseSurfProp() {
+      if (this._tempResult.type === "polygon") {
+        this._tempResult.surfaceProperties = {
+          ambient: parseFloat(this._popStack()),
+          diffuse: parseFloat(this._popStack()),
+          specularReflectance: parseFloat(this._popStack()),
+          specularScattering: parseFloat(this._popStack()),
+          transparency: parseFloat(this._popStack())
+        };
+      } else if (this._tempResult.type === "line") {
+        this._tempResult.surfaceProperties = {
+          width: this._popStack()
+        };
+      }
+    }
+
+    /**
+    * [PRIVATE]
+    * Parse the vertices from the raw data.
+    */
+
+  }, {
+    key: "_parseVertices",
+    value: function _parseVertices() {
+      var count = this._tempResult.numVertices * 3;
+      var vertices = new Float32Array(count);
+      for (var i = 0; i < count; i++) {
+        vertices[i] = parseFloat(this._popStack());
+      }
+
+      this._tempResult.vertices = vertices;
+    }
+
+    /**
+    * [PRIVATE]
+    * Parse the normal vector from the raw data.
+    */
+
+  }, {
+    key: "_parseNormals",
+    value: function _parseNormals() {
+      var count = this._tempResult.numVertices * 3;
+      var normals = new Float32Array(count);
+
+      for (var i = 0; i < count; i++) {
+        normals[i] = parseFloat(this._popStack());
+      }
+
+      this._tempResult.normals = normals;
+    }
+
+    /**
+    * [PRIVATE]
+    * Parse the color from the raw data.
+    */
+
+  }, {
+    key: "_parseColors",
+    value: function _parseColors() {
+      var colorFlag = parseInt(this._popStack(), 10);
+      var colors;
+      var count;
+
+      if (colorFlag === 0) {
+        colors = new Float32Array(4);
+        for (var i = 0; i < 4; i++) {
+          colors[i] = parseFloat(this._popStack());
+        }
+      } else if (colorFlag === 1) {
+        count = this._tempResult.num_polygons * 4;
+        colors = new Float32Array(count);
+        for (var i = 0; i < count; i++) {
+          colors[i] = parseFloat(this._popStack());
+        }
+      } else if (colorFlag === 2) {
+        count = this._tempResult.numVertices * 4;
+        colors = new Float32Array(count);
+        for (var i = 0; i < count; i++) {
+          colors[i] = parseFloat(this._popStack());
+        }
+      } else {
+        this._tempResult.error = true;
+        this._tempResult.errorMessage = "Invalid color flag: " + colorFlag;
+      }
+
+      this._tempResult.colorFlag = colorFlag;
+      this._tempResult.colors = colors;
+    }
+
+    /**
+    * [PRIVATE]
+    * Not sure how useful endIndices are, it was used in BrainBrowser so I kept them.
+    * (is that useful?)
+    */
+
+  }, {
+    key: "_parseEndIndices",
+    value: function _parseEndIndices() {
+      var count = this._tempResult.nitems;
+      var endIndices = new Uint32Array(count);
+
+      for (var i = 0; i < count; i++) {
+        endIndices[i] = parseInt(this._popStack(), 10);
+      }
+
+      this._tempResult.endIndices = endIndices;
+    }
+
+    /**
+    * [PRIVATE]
+    * Reads the vertices indices to use to make triangles.
+    */
+
+  }, {
+    key: "_parseIndices",
+    value: function _parseIndices() {
+      var count = this._stackIndex + 1;
+      var indices = new Uint32Array(count);
+
+      for (var i = 0; i < count; i++) {
+        indices[i] = parseInt(this._popStack(), 10);
+      }
+
+      this._tempResult.indices = indices;
+    }
+
+    /**
+    * [PRIVATE]
+    * pop the raw data (big string file)
+    * @return {String}
+    */
+
+  }, {
+    key: "_popStack",
+    value: function _popStack() {
+      return this._stack[this._stackIndex--];
+    }
+
+    /**
+    * Get if the file is valid, after an atempt of parsing
+    * @return {Boolean} true if valid, false if invalid
+    */
+
+  }, {
+    key: "isValid",
+    value: function isValid() {
+      return !this._shapeData.error;
+    }
+
+    /**
+    * Get the error message if any
+    * @return {String} the error message, or null if any
+    */
+
+  }, {
+    key: "getErrorMessage",
+    value: function getErrorMessage() {
+      return this._shapeData.errorMessage;
+    }
+
+    /**
+    * [DEBUGGING]
+    * @return {Object} the entire shapeData object.
+    */
+
+  }, {
+    key: "getShapeData",
+    value: function getShapeData() {
+      return this._shapeData;
+    }
+
+    /**
+    * Returns the index of vertices to be used to make triangles, as a typed array.
+    * @return {Uint32Array} Since triangles have 3 vertices, the array contains index such as
+    * [i0, i1, i2, i0, i1, i2, ...].
+    */
+
+  }, {
+    key: "getShapeRawIndices",
+    value: function getShapeRawIndices() {
+      if (this._shapeData.error) {
+        console.warn("ERROR while parsing: " + this._shapeData.errorMessage);
+        return null;
+      }
+
+      return this._shapeData.shapes;
+    }
+
+    /**
+    * Returns the vertice position as a typed array.
+    * @return {Float32Array} of points encoded like [x, y, z, x, y, z, ...]
+    */
+
+  }, {
+    key: "getRawVertices",
+    value: function getRawVertices() {
+      if (this._shapeData.error) {
+        console.warn("ERROR while parsing: " + this._shapeData.errorMessage);
+        return null;
+      }
+
+      return this._shapeData.vertices;
+    }
+
+    /**
+    * Returns the normal vectors as a typed array.
+    * @return {Float32Array} of normal vector encoded like [x, y, z, x, y, z, ...]
+    */
+
+  }, {
+    key: "getRawNormals",
+    value: function getRawNormals() {
+      if (this._shapeData.error) {
+        console.warn("ERROR while parsing: " + this._shapeData.errorMessage);
+        return null;
+      }
+
+      return this._shapeData.normals;
+    }
+
+    /**
+    * Get the colors encoded like [r, g, b, a, r, g, b, a, ...]
+    * @return {Float32Array} of size 4 or of size 4xnumOfVertices
+    */
+
+  }, {
+    key: "getRawColors",
+    value: function getRawColors() {
+      if (this._shapeData.error) {
+        console.warn("ERROR while parsing: " + this._shapeData.errorMessage);
+        return null;
+      }
+
+      return this._shapeData.colors;
+    }
+
+    /**
+    * The surface properties contains transparency info about specularity transparency
+    * and other nice light-related behaviour thingies.
+    * May be used when building a material, but this is not mandatory.
+    * @return {Object}
+    */
+
+  }, {
+    key: "getSurfaceProperties",
+    value: function getSurfaceProperties() {
+      if (this._shapeData.error) {
+        console.warn("ERROR while parsing: " + this._shapeData.errorMessage);
+        return null;
+      }
+
+      return this._shapeData.surfaceProperties;
+    }
+
+    /**
+    * Get the type of mesh.
+    * @return {String} "polygon" or "line"
+    */
+
+  }, {
+    key: "getType",
+    value: function getType() {
+      return this._shapeData.type;
+    }
+
+    /**
+    * Get wether of not the output is a 3D polygon  type
+    * @return {Boolean}
+    */
+
+  }, {
+    key: "isPolygon",
+    value: function isPolygon() {
+      return this._shapeData.type === "polygon";
+    }
+
+    /**
+    * Get wether of not the output is a line  type
+    * @return {Boolean}
+    */
+
+  }, {
+    key: "isLine",
+    value: function isLine() {
+      return this._shapeData.type === "line";
+    }
+  }]);
+  return MniObjParser;
+}(); /* END of class MniObjParser */
+
+/*
+* Author   Jonathan Lurie - http://me.jonathanlurie.fr
+* License  MIT
+* Link      https://github.com/Pixpipe/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* When most parser need an ArrayBuffer as input, the MNI OBJ mesh file being text
+* files, an instance of MniObjDecoder takes the string content of such files.
+* The string content of a file can be provided by a FileToArrayBufferReader or
+* UrlToArrayBufferReader with the metadata `readAsText` being true.
+* Then use the method `.addInput( myString )` to provide the input and call
+* the method `.update()`. If the input is suscceessfully parsed, the output of
+* a MniObjDecoder is a Mesh3D. If the file is invalid, a message is probably written
+* in the JS console and no output is available.
+*
+* **Usage**
+* - [examples/fileToMniObj.html](../examples/fileToMniObj.html)
+*/
+
+var MniObjDecoder = function (_Filter) {
+  inherits(MniObjDecoder, _Filter);
+
+  function MniObjDecoder() {
+    classCallCheck(this, MniObjDecoder);
+    return possibleConstructorReturn(this, (MniObjDecoder.__proto__ || Object.getPrototypeOf(MniObjDecoder)).call(this));
+    //this.addInputValidator(0, string);
+    // Adding an input validator with the type string is not possible because
+    // a string is not an "instanceof" String unless it is created by the String
+    // constructor, what we generaly dont want to do if they are very long.
+    // When decoding a file, a string is generally as a DOMString, with is
+    // different as String, and we dont want to duplicated that into memory.
+  }
+
+  createClass(MniObjDecoder, [{
+    key: '_run',
+    value: function _run() {
+      var input = this._getInput();
+
+      //if( !(input instanceof String) ){
+      if (typeof input !== "string") {
+        console.warn("The input data for MniObjDecoder ust be a String.");
+        return;
+      }
+
+      var parser = new MniObjParser();
+      parser.parse(input);
+
+      // Check if the parsing went ok:
+      if (!parser.isValid()) {
+        console.warn("Invalid MNI OBJ file.\n" + "ERROR: " + parser.getErrorMessage());
+        return;
+      }
+
+      if (!parser.isPolygon()) {
+        console.warn("The MNI OBJ file is valid but does not describe a 3D mesh.");
+        return;
+      }
+
+      // get the position of all the vertices as [x, y, z, x, y, z, ... ]
+      var positions = parser.getRawVertices(); // Float32Array
+
+      // get the index of the vertices involved in faces. These are the index from the "positions" array
+      // [index0, index1, index2, index0, index1, index2, ... ] , each are triangles
+      var indices = parser.getShapeRawIndices(); // Uint32Array
+
+      // get the list of normal vectors (unit) as [x, y, z, x, y, z, ... ]
+      var normals = parser.getRawNormals(); // Float32Array
+
+      // get all the colors per vertex as [r, g, b, a, r, g, b, a, ... ]
+      var colors = parser.getRawColors(); // Uint8Array
+
+      // get some material information, not mandatory to reconstruct the mesh
+      var surfaceProperties = parser.getSurfaceProperties(); // object
+
+
+      var mesh = new Mesh3D();
+      mesh.setVertexPositions(positions);
+      mesh.setPolygonFacesOrder(indices);
+      mesh.setPolygonFacesNormals(normals);
+      mesh.setVertexColors(colors);
+      mesh.setNumberOfVerticesPerShapes(3); // here
+      mesh.setNumberOfComponentsPerColor(4);
+
+      this._output[0] = mesh;
+    }
+  }]);
+  return MniObjDecoder;
+}(Filter); /* END of class Filter */
+
+function createCommonjsModule$3(fn, module) {
+  return module = { exports: {} }, fn(module, module.exports), module.exports;
+}
+
+var traverse_1$2 = createCommonjsModule$3(function (module) {
+  var traverse = module.exports = function (obj) {
+    return new Traverse(obj);
+  };
+
+  function Traverse(obj) {
+    this.value = obj;
+  }
+
+  Traverse.prototype.get = function (ps) {
+    var node = this.value;
+    for (var i = 0; i < ps.length; i++) {
+      var key = ps[i];
+      if (!node || !hasOwnProperty.call(node, key)) {
+        node = undefined;
+        break;
+      }
+      node = node[key];
+    }
+    return node;
+  };
+
+  Traverse.prototype.has = function (ps) {
+    var node = this.value;
+    for (var i = 0; i < ps.length; i++) {
+      var key = ps[i];
+      if (!node || !hasOwnProperty.call(node, key)) {
+        return false;
+      }
+      node = node[key];
+    }
+    return true;
+  };
+
+  Traverse.prototype.set = function (ps, value) {
+    var node = this.value;
+    for (var i = 0; i < ps.length - 1; i++) {
+      var key = ps[i];
+      if (!hasOwnProperty.call(node, key)) node[key] = {};
+      node = node[key];
+    }
+    node[ps[i]] = value;
+    return value;
+  };
+
+  Traverse.prototype.map = function (cb) {
+    return walk(this.value, cb, true);
+  };
+
+  Traverse.prototype.forEach = function (cb) {
+    this.value = walk(this.value, cb, false);
+    return this.value;
+  };
+
+  Traverse.prototype.reduce = function (cb, init) {
+    var skip = arguments.length === 1;
+    var acc = skip ? this.value : init;
+    this.forEach(function (x) {
+      if (!this.isRoot || !skip) {
+        acc = cb.call(this, acc, x);
+      }
+    });
+    return acc;
+  };
+
+  Traverse.prototype.paths = function () {
+    var acc = [];
+    this.forEach(function (x) {
+      acc.push(this.path);
+    });
+    return acc;
+  };
+
+  Traverse.prototype.nodes = function () {
+    var acc = [];
+    this.forEach(function (x) {
+      acc.push(this.node);
+    });
+    return acc;
+  };
+
+  Traverse.prototype.clone = function () {
+    var parents = [],
+        nodes = [];
+
+    return function clone(src) {
+      for (var i = 0; i < parents.length; i++) {
+        if (parents[i] === src) {
+          return nodes[i];
+        }
+      }
+
+      if ((typeof src === 'undefined' ? 'undefined' : _typeof(src)) === 'object' && src !== null) {
+        var dst = copy(src);
+
+        parents.push(src);
+        nodes.push(dst);
+
+        forEach(objectKeys(src), function (key) {
+          dst[key] = clone(src[key]);
+        });
+
+        parents.pop();
+        nodes.pop();
+        return dst;
+      } else {
+        return src;
+      }
+    }(this.value);
+  };
+
+  function walk(root, cb, immutable) {
+    var path = [];
+    var parents = [];
+    var alive = true;
+
+    return function walker(node_) {
+      var node = immutable ? copy(node_) : node_;
+      var modifiers = {};
+
+      var keepGoing = true;
+
+      var state = {
+        node: node,
+        node_: node_,
+        path: [].concat(path),
+        parent: parents[parents.length - 1],
+        parents: parents,
+        key: path.slice(-1)[0],
+        isRoot: path.length === 0,
+        level: path.length,
+        circular: null,
+        update: function update(x, stopHere) {
+          if (!state.isRoot) {
+            state.parent.node[state.key] = x;
+          }
+          state.node = x;
+          if (stopHere) keepGoing = false;
+        },
+        'delete': function _delete(stopHere) {
+          delete state.parent.node[state.key];
+          if (stopHere) keepGoing = false;
+        },
+        remove: function remove(stopHere) {
+          if (isArray(state.parent.node)) {
+            state.parent.node.splice(state.key, 1);
+          } else {
+            delete state.parent.node[state.key];
+          }
+          if (stopHere) keepGoing = false;
+        },
+        keys: null,
+        before: function before(f) {
+          modifiers.before = f;
+        },
+        after: function after(f) {
+          modifiers.after = f;
+        },
+        pre: function pre(f) {
+          modifiers.pre = f;
+        },
+        post: function post(f) {
+          modifiers.post = f;
+        },
+        stop: function stop() {
+          alive = false;
+        },
+        block: function block() {
+          keepGoing = false;
+        }
+      };
+
+      if (!alive) return state;
+
+      function updateState() {
+        if (_typeof(state.node) === 'object' && state.node !== null) {
+          if (!state.keys || state.node_ !== state.node) {
+            state.keys = objectKeys(state.node);
+          }
+
+          state.isLeaf = state.keys.length == 0;
+
+          for (var i = 0; i < parents.length; i++) {
+            if (parents[i].node_ === node_) {
+              state.circular = parents[i];
+              break;
+            }
+          }
+        } else {
+          state.isLeaf = true;
+          state.keys = null;
+        }
+
+        state.notLeaf = !state.isLeaf;
+        state.notRoot = !state.isRoot;
+      }
+
+      updateState();
+
+      // use return values to update if defined
+      var ret = cb.call(state, state.node);
+      if (ret !== undefined && state.update) state.update(ret);
+
+      if (modifiers.before) modifiers.before.call(state, state.node);
+
+      if (!keepGoing) return state;
+
+      if (_typeof(state.node) == 'object' && state.node !== null && !state.circular) {
+        parents.push(state);
+
+        updateState();
+
+        forEach(state.keys, function (key, i) {
+          path.push(key);
+
+          if (modifiers.pre) modifiers.pre.call(state, state.node[key], key);
+
+          var child = walker(state.node[key]);
+          if (immutable && hasOwnProperty.call(state.node, key)) {
+            state.node[key] = child.node;
+          }
+
+          child.isLast = i == state.keys.length - 1;
+          child.isFirst = i == 0;
+
+          if (modifiers.post) modifiers.post.call(state, child);
+
+          path.pop();
+        });
+        parents.pop();
+      }
+
+      if (modifiers.after) modifiers.after.call(state, state.node);
+
+      return state;
+    }(root).node;
+  }
+
+  function copy(src) {
+    if ((typeof src === 'undefined' ? 'undefined' : _typeof(src)) === 'object' && src !== null) {
+      var dst;
+
+      if (isArray(src)) {
+        dst = [];
+      } else if (isDate(src)) {
+        dst = new Date(src.getTime ? src.getTime() : src);
+      } else if (isRegExp(src)) {
+        dst = new RegExp(src);
+      } else if (isError(src)) {
+        dst = { message: src.message };
+      } else if (isBoolean(src)) {
+        dst = new Boolean(src);
+      } else if (isNumber(src)) {
+        dst = new Number(src);
+      } else if (isString(src)) {
+        dst = new String(src);
+      } else if (Object.create && Object.getPrototypeOf) {
+        dst = Object.create(Object.getPrototypeOf(src));
+      } else if (src.constructor === Object) {
+        dst = {};
+      } else {
+        var proto = src.constructor && src.constructor.prototype || src.__proto__ || {};
+        var T = function T() {};
+        T.prototype = proto;
+        dst = new T();
+      }
+
+      forEach(objectKeys(src), function (key) {
+        dst[key] = src[key];
+      });
+      return dst;
+    } else return src;
+  }
+
+  var objectKeys = Object.keys || function keys(obj) {
+    var res = [];
+    for (var key in obj) {
+      res.push(key);
+    }return res;
+  };
+
+  function toS(obj) {
+    return Object.prototype.toString.call(obj);
+  }
+  function isDate(obj) {
+    return toS(obj) === '[object Date]';
+  }
+  function isRegExp(obj) {
+    return toS(obj) === '[object RegExp]';
+  }
+  function isError(obj) {
+    return toS(obj) === '[object Error]';
+  }
+  function isBoolean(obj) {
+    return toS(obj) === '[object Boolean]';
+  }
+  function isNumber(obj) {
+    return toS(obj) === '[object Number]';
+  }
+  function isString(obj) {
+    return toS(obj) === '[object String]';
+  }
+
+  var isArray = Array.isArray || function isArray(xs) {
+    return Object.prototype.toString.call(xs) === '[object Array]';
+  };
+
+  var forEach = function forEach(xs, fn) {
+    if (xs.forEach) return xs.forEach(fn);else for (var i = 0; i < xs.length; i++) {
+      fn(xs[i], i, xs);
+    }
+  };
+
+  forEach(objectKeys(Traverse.prototype), function (key) {
+    traverse[key] = function (obj) {
+      var args = [].slice.call(arguments, 1);
+      var t = new Traverse(obj);
+      return t[key].apply(t, args);
+    };
+  });
+
+  var hasOwnProperty = Object.hasOwnProperty || function (obj, key) {
+    return key in obj;
+  };
+});
+
+var asyncGenerator$4 = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function wrap(fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function _await(value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
+var classCallCheck$4 = function classCallCheck$$1(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass$4 = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+/**
+* The CodecUtils class gather some static methods that can be useful while
+* encodeing/decoding data.
+* CodecUtils does not have a constructor, don't try to instanciate it.
+*/
+
+var CodecUtils$2 = function () {
+  function CodecUtils() {
+    classCallCheck$4(this, CodecUtils);
+  }
+
+  createClass$4(CodecUtils, null, [{
+    key: "isPlatformLittleEndian",
+
+    /**
+    * Get whether or not the platform is using little endian.
+    * @return {Boolen } true if the platform is little endian, false if big endian
+    */
+    value: function isPlatformLittleEndian() {
+      var a = new Uint32Array([0x12345678]);
+      var b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+      return b[0] != 0x12;
+    }
+
+    /**
+    * convert an ArrayBuffer into a unicode string (2 bytes for each char)
+    * Note: this method was kindly borrowed from Google Closure Compiler:
+    * https://github.com/google/closure-library/blob/master/closure/goog/crypt/crypt.js
+    * @param {ArrayBuffer} buf - input ArrayBuffer
+    * @return {String} a string compatible with Unicode characters
+    */
+
+  }, {
+    key: "arrayBufferToUnicode",
+    value: function arrayBufferToUnicode(buff) {
+      var buffUint8 = new Uint8Array(buff);
+      var out = [],
+          pos = 0,
+          c = 0;
+
+      while (pos < buffUint8.length) {
+        var c1 = buffUint8[pos++];
+        if (c1 < 128) {
+          out[c++] = String.fromCharCode(c1);
+        } else if (c1 > 191 && c1 < 224) {
+          var c2 = buffUint8[pos++];
+          out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
+        } else if (c1 > 239 && c1 < 365) {
+          // Surrogate Pair
+          var c2 = buffUint8[pos++];
+          var c3 = buffUint8[pos++];
+          var c4 = buffUint8[pos++];
+          var u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) - 0x10000;
+          out[c++] = String.fromCharCode(0xD800 + (u >> 10));
+          out[c++] = String.fromCharCode(0xDC00 + (u & 1023));
+        } else {
+          var c2 = buffUint8[pos++];
+          var c3 = buffUint8[pos++];
+          out[c++] = String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
+        }
+      }
+      return out.join('');
+    }
+  }, {
+    key: "unicodeToArrayBuffer",
+
+    /**
+    * convert a unicode string into an ArrayBuffer
+    * Note that the str is a regular string but it will be encoded with
+    * 2 bytes per char instead of 1 ( ASCII uses 1 byte/char ).
+    * Note: this method was kindly borrowed from Google Closure Compiler:
+    * https://github.com/google/closure-library/blob/master/closure/goog/crypt/crypt.js
+    * @param {String} str - string to encode
+    * @return {ArrayBuffer} the output ArrayBuffer
+    */
+    value: function unicodeToArrayBuffer(str) {
+      var out = [],
+          p = 0;
+      for (var i = 0; i < str.length; i++) {
+        var c = str.charCodeAt(i);
+        if (c < 128) {
+          out[p++] = c;
+        } else if (c < 2048) {
+          out[p++] = c >> 6 | 192;
+          out[p++] = c & 63 | 128;
+        } else if ((c & 0xFC00) == 0xD800 && i + 1 < str.length && (str.charCodeAt(i + 1) & 0xFC00) == 0xDC00) {
+          // Surrogate Pair
+          c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
+          out[p++] = c >> 18 | 240;
+          out[p++] = c >> 12 & 63 | 128;
+          out[p++] = c >> 6 & 63 | 128;
+          out[p++] = c & 63 | 128;
+        } else {
+          out[p++] = c >> 12 | 224;
+          out[p++] = c >> 6 & 63 | 128;
+          out[p++] = c & 63 | 128;
+        }
+      }
+
+      // make a buffer out of the array
+      return new Uint8Array(out).buffer;
+    }
+  }, {
+    key: "arrayBufferToString8",
+
+    /**
+    * Convert an ArrayBuffer into a ASCII string (1 byte for each char)
+    * @param {ArrayBuffer} buf - buffer to convert into ASCII string
+    * @return {String} the output string
+    */
+    value: function arrayBufferToString8(buf) {
+      return String.fromCharCode.apply(null, new Uint8Array(buf));
+    }
+
+    /**
+    * Convert a ASCII string into an ArrayBuffer.
+    * Note that the str is a regular string, it will be encoded with 1 byte per char
+    * @param {String} str - string to encode
+    * @return {ArrayBuffer}
+    */
+
+  }, {
+    key: "string8ToArrayBuffer",
+    value: function string8ToArrayBuffer(str) {
+      var buf = new ArrayBuffer(str.length);
+      var bufView = new Uint8Array(buf);
+      for (var i = 0; i < str.length; i++) {
+        bufView[i] = str.charCodeAt(i);
+      }
+      return buf;
+    }
+
+    /**
+    * Write a ASCII string into a buffer
+    * @param {String} str - a string that contains only ASCII characters
+    * @param {ArrayBuffer} buffer - the buffer where to write the string
+    * @param {Number} byteOffset - the offset to apply, in number of bytes
+    */
+
+  }, {
+    key: "setString8InBuffer",
+    value: function setString8InBuffer(str, buffer) {
+      var byteOffset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+      if (byteOffset < 0) {
+        console.warn("The byte offset cannot be negative.");
+        return;
+      }
+
+      if (!buffer || !(buffer instanceof ArrayBuffer)) {
+        console.warn("The buffer must be a valid ArrayBuffer.");
+        return;
+      }
+
+      if (str.length + byteOffset > buffer.byteLength) {
+        console.warn("The string is too long to be writen in this buffer.");
+        return;
+      }
+
+      var bufView = new Uint8Array(buffer);
+
+      for (var i = 0; i < str.length; i++) {
+        bufView[i + byteOffset] = str.charCodeAt(i);
+      }
+    }
+
+    /**
+    * Extract an ASCII string from an ArrayBuffer
+    * @param {ArrayBuffer} buffer - the buffer
+    * @param {Number} strLength - number of chars in the string we want
+    * @param {Number} byteOffset - the offset in number of bytes
+    * @return {String} the string, or null in case of error
+    */
+
+  }, {
+    key: "getString8FromBuffer",
+    value: function getString8FromBuffer(buffer, strLength) {
+      var byteOffset = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+      if (byteOffset < 0) {
+        console.warn("The byte offset cannot be negative.");
+        return null;
+      }
+
+      if (!buffer || !(buffer instanceof ArrayBuffer)) {
+        console.warn("The buffer must be a valid ArrayBuffer.");
+        return null;
+      }
+
+      if (strLength + byteOffset > buffer.byteLength) {
+        console.warn("The string is too long to be writen in this buffer.");
+        return null;
+      }
+
+      return String.fromCharCode.apply(null, new Uint8Array(buffer, byteOffset, strLength));
+    }
+
+    /**
+    * Serializes a JS object into an ArrayBuffer.
+    * This is using a unicode JSON intermediate step.
+    * @param {Object} obj - an object that does not have cyclic structure
+    * @return {ArrayBuffer} the serialized output
+    */
+
+  }, {
+    key: "objectToArrayBuffer",
+    value: function objectToArrayBuffer(obj) {
+      var buff = null;
+      var objCleanClone = CodecUtils.makeSerializeFriendly(obj);
+
+      try {
+        var strObj = JSON.stringify(objCleanClone);
+        buff = CodecUtils.unicodeToArrayBuffer(strObj);
+      } catch (e) {
+        console.warn(e);
+      }
+
+      return buff;
+    }
+
+    /**
+    * Convert an ArrayBuffer into a JS Object. This uses an intermediate unicode JSON string.
+    * Of course, this buffer has to come from a serialized object.
+    * @param {ArrayBuffer} buff - the ArrayBuffer that hides some object
+    * @return {Object} the deserialized object
+    */
+
+  }, {
+    key: "ArrayBufferToObject",
+    value: function ArrayBufferToObject(buff) {
+      var obj = null;
+
+      try {
+        var strObj = CodecUtils.arrayBufferToUnicode(buff);
+        obj = JSON.parse(strObj);
+      } catch (e) {
+        console.warn(e);
+      }
+
+      return obj;
+    }
+
+    /**
+    * Get if wether of not the arg is a typed array
+    * @param {Object} obj - possibly a typed array, or maybe not
+    * @return {Boolean} true if obj is a typed array
+    */
+
+  }, {
+    key: "isTypedArray",
+    value: function isTypedArray(obj) {
+      return obj instanceof Int8Array || obj instanceof Uint8Array || obj instanceof Uint8ClampedArray || obj instanceof Int16Array || obj instanceof Uint16Array || obj instanceof Int32Array || obj instanceof Uint32Array || obj instanceof Float32Array || obj instanceof Float64Array;
+    }
+
+    /**
+    * Merge some ArrayBuffes in a single one
+    * @param {Array} arrayOfBuffers - some ArrayBuffers
+    * @return {ArrayBuffer} the larger merged buffer
+    */
+
+  }, {
+    key: "mergeBuffers",
+    value: function mergeBuffers(arrayOfBuffers) {
+      var totalByteSize = 0;
+
+      for (var i = 0; i < arrayOfBuffers.length; i++) {
+        totalByteSize += arrayOfBuffers[i].byteLength;
+      }
+
+      var concatArray = new Uint8Array(totalByteSize);
+
+      var offset = 0;
+      for (var i = 0; i < arrayOfBuffers.length; i++) {
+        concatArray.set(new Uint8Array(arrayOfBuffers[i]), offset);
+        offset += arrayOfBuffers[i].byteLength;
+      }
+
+      return concatArray.buffer;
+    }
+
+    /**
+    * In a browser, the global object is `window` while in Node, it's `GLOBAL`.
+    * This method return the one that is relevant to the execution context.
+    * @return {Object} the global object
+    */
+
+  }, {
+    key: "getGlobalObject",
+    value: function getGlobalObject() {
+      var constructorHost = null;
+
+      try {
+        constructorHost = window; // in a web browser
+      } catch (e) {
+        try {
+          constructorHost = GLOBAL; // in node
+        } catch (e) {
+          console.warn("You are not in a Javascript environment?? Weird.");
+          return null;
+        }
+      }
+      return constructorHost;
+    }
+
+    /**
+    * Extract a typed array from an arbitrary buffer, with an arbitrary offset
+    * @param {ArrayBuffer} buffer - the buffer from which we extract data
+    * @param {Number} byteOffset - offset from the begining of buffer
+    * @param {Function} arrayType - function object, actually the constructor of the output array
+    * @param {Number} numberOfElements - nb of elem we want to fetch from the buffer
+    * @return {TypedArray} output of type given by arg arrayType - this is a copy, not a view
+    */
+
+  }, {
+    key: "extractTypedArray",
+    value: function extractTypedArray(buffer, byteOffset, arrayType, numberOfElements) {
+      if (!buffer) {
+        console.warn("Input Buffer is null.");
+        return null;
+      }
+
+      if (!(buffer instanceof ArrayBuffer)) {
+        console.warn("Buffer must be of type ArrayBuffer");
+        return null;
+      }
+
+      if (numberOfElements <= 0) {
+        console.warn("The number of elements to fetch must be greater than 0");
+        return null;
+      }
+
+      if (byteOffset < 0) {
+        console.warn("The byte offset must be possitive or 0");
+        return null;
+      }
+
+      if (byteOffset >= buffer.byteLength) {
+        console.warn("The offset cannot be larger than the size of the buffer.");
+        return null;
+      }
+
+      if (arrayType instanceof Function && !("BYTES_PER_ELEMENT" in arrayType)) {
+        console.warn("ArrayType must be a typed array constructor function.");
+        return null;
+      }
+
+      if (arrayType.BYTES_PER_ELEMENT * numberOfElements + byteOffset > buffer.byteLength) {
+        console.warn("The requested number of elements is too large for this buffer");
+        return;
+      }
+
+      var slicedBuff = buffer.slice(byteOffset, byteOffset + numberOfElements * arrayType.BYTES_PER_ELEMENT);
+      return new arrayType(slicedBuff);
+    }
+
+    /**
+    * Get some info about the given TypedArray
+    * @param {TypedArray} typedArray - one of the typed array
+    * @return {Object} in form of {type: String, signed: Boolean, bytesPerElements: Number, byteLength: Number, length: Number}
+    */
+
+  }, {
+    key: "getTypedArrayInfo",
+    value: function getTypedArrayInfo(typedArray) {
+      var type = null;
+      var signed = false;
+
+      if (typedArray instanceof Int8Array) {
+        type = "int";
+        signed = false;
+      } else if (typedArray instanceof Uint8Array) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Uint8ClampedArray) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Int16Array) {
+        type = "int";
+        signed = false;
+      } else if (typedArray instanceof Uint16Array) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Int32Array) {
+        type = "int";
+        signed = false;
+      } else if (typedArray instanceof Uint32Array) {
+        type = "int";
+        signed = true;
+      } else if (typedArray instanceof Float32Array) {
+        type = "float";
+        signed = false;
+      } else if (typedArray instanceof Float64Array) {
+        type = "float";
+        signed = false;
+      }
+
+      return {
+        type: type,
+        signed: signed,
+        bytesPerElements: typedArray.BYTES_PER_ELEMENT,
+        byteLength: typedArray.byteLength,
+        length: typedArray.length
+      };
+    }
+
+    /**
+    * Counts the number of typed array obj has as attributes
+    * @param {Object} obj - an Object
+    * @return {Number} the number of typed array
+    */
+
+  }, {
+    key: "howManyTypedArrayAttributes",
+    value: function howManyTypedArrayAttributes(obj) {
+      var typArrCounter = 0;
+      traverse_1$2(obj).forEach(function (x) {
+        typArrCounter += CodecUtils.isTypedArray(x);
+      });
+      return typArrCounter;
+    }
+
+    /**
+    * Check if the given object contains any circular reference.
+    * (Circular ref are non serilizable easily, we want to spot them)
+    * @param {Object} obj - An object to check
+    * @return {Boolean} true if obj contains circular refm false if not
+    */
+
+  }, {
+    key: "hasCircularReference",
+    value: function hasCircularReference(obj) {
+      var hasCircular = false;
+      traverse_1$2(obj).forEach(function (x) {
+        if (this.circular) {
+          hasCircular = true;
+        }
+      });
+      return hasCircular;
+    }
+
+    /**
+    * Remove circular dependencies from an object and return a circularRef-free version
+    * of the object (does not change the original obj), of null if no circular ref was found
+    * @param {Object} obj - An object to check
+    * @return {Object} a circular-ref free object copy if any was found, or null if no circ was found
+    */
+
+  }, {
+    key: "removeCircularReference",
+    value: function removeCircularReference(obj) {
+      var hasCircular = false;
+      var noCircRefObj = traverse_1$2(obj).map(function (x) {
+        if (this.circular) {
+          this.remove();
+          hasCircular = true;
+        }
+      });
+      return hasCircular ? noCircRefObj : null;
+    }
+
+    /**
+    * Clone the object and replace the typed array attributes by regular Arrays.
+    * @param {Object} obj - an object to alter
+    * @return {Object} the clone if ant typed array were changed, or null if was obj didnt contain any typed array.
+    */
+
+  }, {
+    key: "replaceTypedArrayAttributesByArrays",
+    value: function replaceTypedArrayAttributesByArrays(obj) {
+      var hasTypedArray = false;
+
+      var noTypedArrClone = traverse_1$2(obj).map(function (x) {
+        if (CodecUtils.isTypedArray(x)) {
+          // here, we cannot call .length directly because traverse.map already serialized
+          // typed arrays into regular objects
+          var origSize = Object.keys(x).length;
+          var untypedArray = new Array(origSize);
+
+          for (var i = 0; i < origSize; i++) {
+            untypedArray[i] = x[i];
+          }
+          this.update(untypedArray);
+          hasTypedArray = true;
+        }
+      });
+      return hasTypedArray ? noTypedArrClone : null;
+    }
+
+    /**
+    * Creates a clone, does not alter the original object.
+    * Remove circular dependencies and replace typed arrays by regular arrays.
+    * Both will make the serialization possible and more reliable.
+    * @param {Object} obj - the object to make serialization friendly
+    * @return {Object} a clean clone, or null if nothing was done
+    */
+
+  }, {
+    key: "makeSerializeFriendly",
+    value: function makeSerializeFriendly(obj) {
+      var newObj = obj;
+      var noCircular = CodecUtils.removeCircularReference(newObj);
+
+      if (noCircular) newObj = noCircular;
+
+      var noTypedArr = CodecUtils.replaceTypedArrayAttributesByArrays(newObj);
+
+      if (noTypedArr) newObj = noTypedArr;
+
+      return newObj;
+    }
+  }]);
+  return CodecUtils;
+}(); /* END of class CodecUtils */
+
+var asyncGenerator$1$2 = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function wrap(fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function _await(value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
+var classCallCheck$1$2 = function classCallCheck$1(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass$1$2 = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+/*
+* Author    Jonathan Lurie - http://me.jonahanlurie.fr
+* License   MIT
+* Link      https://github.com/jonathanlurie/edfdecoder
+* Lab       MCIN - http://mcin.ca/ - Montreal Neurological Institute
+*/
+
+/**
+* An instance of Edf is usually given as output of an EdfDecoder. It provides an
+* interface with a lot of helper function to query information that were extracted
+* from en *.edf* file, such as header information, getting a signal at a given record
+* or concatenating records of a given signal.
+*
+* Keep in mind that the number of records in an edf file can be decoded by arbitrary
+* measures, or it can be 1 second per records, etc.
+*
+*/
+var Edf = function () {
+  function Edf(header, rawSignals, physicalSignals) {
+    classCallCheck$1$2(this, Edf);
+
+    this._header = header;
+    this._physicalSignals = physicalSignals;
+    this._rawSignals = rawSignals;
+  }
+
+  /**
+  * Get the duration in second of a single record
+  * @return {Number} duration
+  */
+
+  createClass$1$2(Edf, [{
+    key: "getRecordDuration",
+    value: function getRecordDuration() {
+      return this._header.durationDataRecordsSec;
+    }
+
+    /**
+    * Get the ID of the recording
+    * @return {String} the ID
+    */
+
+  }, {
+    key: "getRecordingID",
+    value: function getRecordingID() {
+      return this._header.localRecordingId;
+    }
+
+    /**
+    * get the number of records per signal.
+    * Note: most of the time, records from the same signal are contiguous in time.
+    * @return {Number} the number of records
+    */
+
+  }, {
+    key: "getNumberOfRecords",
+    value: function getNumberOfRecords() {
+      return this._header.nbDataRecords;
+    }
+
+    /**
+    * get the number of signals.
+    * Note: a signal can have more than one record
+    * @return {Number} the number of signals
+    */
+
+  }, {
+    key: "getNumberOfSignals",
+    value: function getNumberOfSignals() {
+      return this._header.nbSignals;
+    }
+
+    /**
+    * Get the patien ID
+    * @return {String} ID
+    */
+
+  }, {
+    key: "getPatientID",
+    value: function getPatientID() {
+      return this._header.patientId;
+    }
+
+    /**
+    * Get the date and the time at which the recording has started
+    * @return {Date} the date
+    */
+
+  }, {
+    key: "getRecordingStartDate",
+    value: function getRecordingStartDate() {
+      return this._header.recordingDate;
+    }
+
+    /**
+    * Get the value of the reserved field, global (from header) or specific to a signal.
+    * Notice: reserved are rarely used.
+    * @param {Number} index - if not specified, get the header's reserved field. If [0, nbSignals[ get the reserved field specific for the given signal
+    * @return {String} the data of the reserved field.
+    */
+
+  }, {
+    key: "getReservedField",
+    value: function getReservedField() {
+      var index = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : -1;
+
+      if (index === -1) {
+        return this._header.reserved;
+      } else {
+        if (index >= 0 && index < this._header.signalInfo.length) {
+          return this._header.signalInfo[index].reserved;
+        }
+      }
+
+      return null;
+    }
+
+    /**
+    * Get the digital maximum for a given signal index
+    * @param {Number} index - index of the signal
+    * @return {Number}
+    */
+
+  }, {
+    key: "getSignalDigitalMax",
+    value: function getSignalDigitalMax(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].digitalMaximum;
+    }
+
+    /**
+    * Get the digital minimum for a given signal index
+    * @param {Number} index - index of the signal
+    * @return {Number}
+    */
+
+  }, {
+    key: "getSignalDigitalMin",
+    value: function getSignalDigitalMin(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].digitalMinimum;
+    }
+
+    /**
+    * Get the physical minimum for a given signal index
+    * @param {Number} index - index of the signal
+    * @return {Number}
+    */
+
+  }, {
+    key: "getSignalPhysicalMin",
+    value: function getSignalPhysicalMin(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].physicalMinimum;
+    }
+
+    /**
+    * Get the physical maximum for a given signal index
+    * @param {Number} index - index of the signal
+    * @return {Number}
+    */
+
+  }, {
+    key: "getSignalPhysicalMax",
+    value: function getSignalPhysicalMax(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].physicalMaximum;
+    }
+
+    /**
+    * Get the label for a given signal index
+    * @param {Number} index - index of the signal
+    * @return {String}
+    */
+
+  }, {
+    key: "getSignalLabel",
+    value: function getSignalLabel(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].label;
+    }
+
+    /**
+    * Get the number of samples per record for a given signal index
+    * @param {Number} index - index of the signal
+    * @return {Number}
+    */
+
+  }, {
+    key: "getSignalNumberOfSamplesPerRecord",
+    value: function getSignalNumberOfSamplesPerRecord(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].nbOfSamples;
+    }
+
+    /**
+    * Get the unit (dimension label) used for a given signal index.
+    * E.g. this can be 'uV' when the signal is an EEG
+    * @param {Number} index - index of the signal
+    * @return {String} the unit name
+    */
+
+  }, {
+    key: "getSignalPhysicalUnit",
+    value: function getSignalPhysicalUnit(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].physicalDimension;
+    }
+
+    /**
+    * Get the unit prefiltering info for a given signal index.
+    * @param {Number} index - index of the signal
+    * @return {String} the prefiltering info
+    */
+
+  }, {
+    key: "getSignalPrefiltering",
+    value: function getSignalPrefiltering(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].prefiltering;
+    }
+
+    /**
+    * Get the transducer type info for a given signal index.
+    * @param {Number} index - index of the signal
+    * @return {String} the transducer type info
+    */
+
+  }, {
+    key: "getSignalTransducerType",
+    value: function getSignalTransducerType(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].transducerType;
+    }
+
+    /**
+    * Get the sampling frequency in Hz of a given signal
+    * @param {Number} index - index of the signal
+    * @return {Number} frequency in Hz
+    */
+
+  }, {
+    key: "getSignalSamplingFrequency",
+    value: function getSignalSamplingFrequency(index) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      return this._header.signalInfo[index].nbOfSamples / this._header.durationDataRecordsSec;
+    }
+
+    /**
+    * Get the physical (scaled) signal at a given index and record
+    * @param {Number} index - index of the signal
+    * @param {Number} record - index of the record
+    * @return {Float32Array} the physical signal in Float32
+    */
+
+  }, {
+    key: "getPhysicalSignal",
+    value: function getPhysicalSignal(index, record) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      if (record < 0 && record >= this._physicalSignals[index].length) {
+        console.warn("Record index is out of range");
+        return null;
+      }
+
+      return this._physicalSignals[index][record];
+    }
+
+    /**
+    * Get the raw (digital) signal at a given index and record
+    * @param {Number} index - index of the signal
+    * @param {Number} record - index of the record
+    * @return {Int16Array} the physical signal in Int16
+    */
+
+  }, {
+    key: "getRawSignal",
+    value: function getRawSignal(index, record) {
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      if (record < 0 && record >= this._rawSignals[index].length) {
+        console.warn("Record index is out of range");
+        return null;
+      }
+
+      return this._rawSignals[index][record];
+    }
+
+    /**
+    * Get concatenated contiguous records of a given signal, the index of the
+    * first record and the number of records to concat.
+    * Notice: this allocates a new buffer of an extented size.
+    * @param {Number} index - index of the signal
+    * @param {Number} recordStart - index of the record to start with
+    * @param {Number} howMany - Number of records to concatenate
+    * @return {Float32Array} the physical signal in Float32
+    */
+
+  }, {
+    key: "getPhysicalSignalConcatRecords",
+    value: function getPhysicalSignalConcatRecords(index) {
+      var recordStart = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : -1;
+      var howMany = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : -1;
+
+      if (index < 0 || index >= this._header.signalInfo.length) {
+        console.warn("Signal index is out of range");
+        return null;
+      }
+
+      if (recordStart < 0 && recordStart >= this._physicalSignals[index].length) {
+        console.warn("The index recordStart is out of range");
+        return null;
+      }
+
+      if (recordStart === -1) {
+        recordStart = 0;
+      }
+
+      if (howMany === -1) {
+        howMany = this._physicalSignals[index].length - recordStart;
+      } else {
+        // we still want to check if what the user put is not out of bound
+        if (recordStart + howMany > this._physicalSignals[index].length) {
+          console.warn("The number of requested records is too large. Forcing only to available records.");
+          howMany = this._physicalSignals[index].length - recordStart;
+        }
+      }
+
+      // index of the last one to consider
+      var recordEnd = recordStart + howMany - 1;
+
+      if (recordEnd < 0 && recordEnd >= this._physicalSignals[index].length) {
+        console.warn("Too many records to concatenate, this goes out of range.");
+        return null;
+      }
+
+      var totalSize = 0;
+      for (var i = recordStart; i < recordStart + howMany; i++) {
+        totalSize += this._physicalSignals[index][i].length;
+      }
+
+      var concatSignal = new Float32Array(totalSize);
+      var offset = 0;
+
+      for (var i = recordStart; i < recordStart + howMany; i++) {
+        concatSignal.set(this._physicalSignals[index][i], offset);
+        offset += this._physicalSignals[index][i].length;
+      }
+
+      return concatSignal;
+    }
+  }]);
+  return Edf;
+}(); /* END of class Edf */
+
+/*
+* Author    Jonathan Lurie - http://me.jonahanlurie.fr
+* License   MIT
+* Link      https://github.com/jonathanlurie/edfdecoder
+* Lab       MCIN - http://mcin.ca/ - Montreal Neurological Institute
+*/
+
+/**
+* An instance of EdfDecoder is used to decode an EDF file, or rather a buffer extracted from a
+* EDF file. To specify the input, use the method `.setInput(buf)` , then launch the decoding
+* with the method `.decode()` and finally get the content as an object with `.getOutput()`.
+* If the output is `null`, then the parser was not able to decode the file.
+*/
+
+var EdfDecoder$1 = function () {
+
+  /**
+   * Create a EdfDecoder.
+   */
+  function EdfDecoder() {
+    classCallCheck$1$2(this, EdfDecoder);
+
+    this._inputBuffer = null;
+    this._output = null;
+  }
+
+  /**
+  * Set the buffer (most likey from a file) that contains some EDF data
+  * @param {ArrayBuffer} buff - buffer from a file
+  */
+
+  createClass$1$2(EdfDecoder, [{
+    key: 'setInput',
+    value: function setInput(buff) {
+      this._output = null;
+      this._inputBuffer = buff;
+    }
+
+    /**
+    * Decode the EDF file buffer set as input. This is done in two steps, first the header and then the data.
+    */
+
+  }, {
+    key: 'decode',
+    value: function decode() {
+      try {
+        var headerInfo = this._decodeHeader();
+        this._decodeData(headerInfo.offset, headerInfo.header);
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    /**
+    * [PRIVATE]
+    * Decodes the header or the file
+    */
+
+  }, {
+    key: '_decodeHeader',
+    value: function _decodeHeader() {
+      if (!this._inputBuffer) {
+        console.warn("A input buffer must be specified.");
+        return;
+      }
+
+      var header = {};
+      var offset = 0;
+
+      // 8 ascii : version of this data format (0)
+      header.dataFormat = CodecUtils$2.getString8FromBuffer(this._inputBuffer, 8, offset).trim();
+      offset += 8;
+
+      // 80 ascii : local patient identification
+      header.patientId = CodecUtils$2.getString8FromBuffer(this._inputBuffer, 80, offset).trim();
+      offset += 80;
+
+      // 80 ascii : local recording identification
+      header.localRecordingId = CodecUtils$2.getString8FromBuffer(this._inputBuffer, 80, offset).trim();
+      offset += 80;
+
+      // 8 ascii : startdate of recording (dd.mm.yy)
+      var recordingStartDate = CodecUtils$2.getString8FromBuffer(this._inputBuffer, 8, offset).trim();
+      offset += 8;
+
+      // 8 ascii : starttime of recording (hh.mm.ss)
+      var recordingStartTime = CodecUtils$2.getString8FromBuffer(this._inputBuffer, 8, offset).trim();
+      offset += 8;
+
+      var date = recordingStartDate.split(".");
+      var time = recordingStartTime.split(".");
+      header.recordingDate = new Date(date[2], date[1], date[0], time[0], time[1], time[2], 0);
+
+      // 8 ascii : number of bytes in header record
+      header.nbBytesHeaderRecord = parseInt(CodecUtils$2.getString8FromBuffer(this._inputBuffer, 8, offset).trim());
+      offset += 8;
+
+      // 44 ascii : reserved
+      header.reserved = CodecUtils$2.getString8FromBuffer(this._inputBuffer, 44, offset);
+      offset += 44;
+
+      // 8 ascii : number of data records (-1 if unknown)
+      header.nbDataRecords = parseInt(CodecUtils$2.getString8FromBuffer(this._inputBuffer, 8, offset).trim());
+      offset += 8;
+
+      // 8 ascii : duration of a data record, in seconds
+      header.durationDataRecordsSec = parseInt(CodecUtils$2.getString8FromBuffer(this._inputBuffer, 8, offset).trim());
+      offset += 8;
+
+      // 4 ascii : number of signals (ns) in data record
+      header.nbSignals = parseInt(CodecUtils$2.getString8FromBuffer(this._inputBuffer, 4, offset).trim());
+      offset += 4;
+
+      // the following fields occurs ns time in a row each
+      var that = this;
+      function getAllSections(sizeOfEachThing) {
+        var allThings = [];
+        for (var i = 0; i < header.nbSignals; i++) {
+          allThings.push(CodecUtils$2.getString8FromBuffer(that._inputBuffer, sizeOfEachThing, offset).trim());
+          offset += sizeOfEachThing;
+        }
+        return allThings;
+      }
+
+      var signalInfoArrays = {
+        // ns * 16 ascii : ns * label (e.g. EEG Fpz-Cz or Body temp)
+        label: getAllSections(16),
+        // ns * 80 ascii : ns * transducer type (e.g. AgAgCl electrode)
+        transducerType: getAllSections(80),
+        // ns * 8 ascii : ns * physical dimension (e.g. uV or degreeC)
+        physicalDimension: getAllSections(8),
+        // ns * 8 ascii : ns * physical minimum (e.g. -500 or 34)
+        physicalMinimum: getAllSections(8),
+        // ns * 8 ascii : ns * physical maximum (e.g. 500 or 40)
+        physicalMaximum: getAllSections(8),
+        // ns * 8 ascii : ns * digital minimum (e.g. -2048)
+        digitalMinimum: getAllSections(8),
+        // ns * 8 ascii : ns * digital maximum (e.g. 2047)
+        digitalMaximum: getAllSections(8),
+        // ns * 80 ascii : ns * prefiltering (e.g. HP:0.1Hz LP:75Hz)
+        prefiltering: getAllSections(80),
+        // ns * 8 ascii : ns * nr of samples in each data record
+        nbOfSamples: getAllSections(8),
+        // ns * 32 ascii : ns * reserved
+        reserved: getAllSections(32)
+      };
+
+      var signalInfo = [];
+      header.signalInfo = signalInfo;
+      for (var i = 0; i < header.nbSignals; i++) {
+        signalInfo.push({
+          label: signalInfoArrays.label[i],
+          transducerType: signalInfoArrays.transducerType[i],
+          physicalDimension: signalInfoArrays.physicalDimension[i],
+          physicalMinimum: parseFloat(signalInfoArrays.physicalMinimum[i]),
+          physicalMaximum: parseFloat(signalInfoArrays.physicalMaximum[i]),
+          digitalMinimum: parseInt(signalInfoArrays.digitalMinimum[i]),
+          digitalMaximum: parseInt(signalInfoArrays.digitalMaximum[i]),
+          prefiltering: signalInfoArrays.prefiltering[i],
+          nbOfSamples: parseInt(signalInfoArrays.nbOfSamples[i]),
+          reserved: signalInfoArrays.reserved[i]
+        });
+      }
+
+      return {
+        offset: offset,
+        header: header
+      };
+    }
+
+    /**
+    * [PRIVATE]
+    * Decodes the data. Must be called after the header is decoded.
+    * @param {Number} byteOffset - byte size of the header
+    */
+
+  }, {
+    key: '_decodeData',
+    value: function _decodeData(byteOffset, header) {
+      if (!this._inputBuffer) {
+        console.warn("A input buffer must be specified.");
+        return;
+      }
+
+      if (!header) {
+        console.warn("Invalid header");
+        return;
+      }
+
+      var sampleType = Int16Array;
+
+      // the raw signal is the digital signal
+      var rawSignals = new Array(header.nbSignals);
+      var physicalSignals = new Array(header.nbSignals);
+      // allocation some room for all the records
+      for (var ns = 0; ns < header.nbSignals; ns++) {
+        rawSignals[ns] = new Array(header.nbDataRecords);
+        physicalSignals[ns] = new Array(header.nbDataRecords);
+      }
+
+      // the signal are faster varying than the records
+      for (var r = 0; r < header.nbDataRecords; r++) {
+        for (var ns = 0; ns < header.nbSignals; ns++) {
+          var signalNbSamples = header.signalInfo[ns].nbOfSamples;
+          var rawSignal = CodecUtils$2.extractTypedArray(this._inputBuffer, byteOffset, sampleType, signalNbSamples);
+          byteOffset += signalNbSamples * sampleType.BYTES_PER_ELEMENT;
+          rawSignals[ns][r] = rawSignal;
+
+          // compute the scaled signal
+          var physicalSignal = new Float32Array(rawSignal.length).fill(0);
+          var digitalSignalRange = header.signalInfo[ns].digitalMaximum - header.signalInfo[ns].digitalMinimum;
+          var physicalSignalRange = header.signalInfo[ns].physicalMaximum - header.signalInfo[ns].physicalMinimum;
+
+          for (var index = 0; index < signalNbSamples; index++) {
+            physicalSignal[index] = (rawSignal[index] - header.signalInfo[ns].digitalMinimum) / digitalSignalRange * physicalSignalRange + header.signalInfo[ns].physicalMinimum;
+          }
+
+          //physicalSignals.push( physicalSignal );
+          physicalSignals[ns][r] = physicalSignal;
+        }
+      }
+
+      this._output = new Edf(header, rawSignals, physicalSignals);
+    } /* END method */
+
+    /**
+    * Get the output as an object. The output contains the the header (Object),
+    * the raw (digital) signal as a Int16Array and the physical (scaled) signal
+    * as a Float32Array.
+    * @return {Object} the output.
+    */
+
+  }, {
+    key: 'getOutput',
+    value: function getOutput() {
+      return this._output;
+    }
+  }]);
+  return EdfDecoder;
+}();
+
+/*
+* Author   Jonathan Lurie - http://me.jonathanlurie.fr
+* License  MIT
+* Link     https://github.com/Pixpipe/pixpipejs
+* Lab      MCIN - Montreal Neurological Institute
+*/
+
+/**
+* An instance of EdfDecoder takes an ArrayBuffer as input. This ArrayBuffer must
+* come from a edf file (European Data Format). Such file can have multiple signals
+* encoded internally, usually from different sensors, this filter will output as
+* many Signal1D object as there is signal in the input file. In addition, each
+* signal is composed of records (e.g. 1sec per record). This decoder concatenates
+* records to output a longer signal. Still, the metadata in each Signal1D tells
+* what the is the length of original record.
+*
+* **Usage**
+* - [examples/fileToEDF.html](../examples/fileToEDF.html)
+* - [examples/differenceEqSignal1D.html](../examples/differenceEqSignal1D.html)
+*
+*/
+
+var EdfDecoder$$1 = function (_Filter) {
+  inherits(EdfDecoder$$1, _Filter);
+
+  function EdfDecoder$$1() {
+    classCallCheck(this, EdfDecoder$$1);
+
+    var _this = possibleConstructorReturn(this, (EdfDecoder$$1.__proto__ || Object.getPrototypeOf(EdfDecoder$$1)).call(this));
+
+    _this.addInputValidator(0, ArrayBuffer);
+    _this.setMetadata("debug", false);
+    _this.setMetadata("concatenateRecords", true);
+
+    return _this;
+  }
+
+  createClass(EdfDecoder$$1, [{
+    key: '_run',
+    value: function _run() {
+      var inputBuffer = this._getInput(0);
+
+      if (!inputBuffer) {
+        console.warn("EdfDecoder requires an ArrayBuffer as input \"0\". Unable to continue.");
+        return;
+      }
+
+      var edfDecoder = new EdfDecoder$1();
+
+      edfDecoder.setInput(inputBuffer);
+      edfDecoder.decode();
+      // an Edf object
+      var edf = edfDecoder.getOutput();
+
+      if (!edf) {
+        console.warn("Invalid EDF file.");
+        return;
+      }
+
+      var nbSignals = edf.getNumberOfSignals();
+      var nbRecords = edf.getNumberOfRecords();
+
+      for (var i = 0; i < nbSignals; i++) {
+        var sig1D = new Signal1D();
+        sig1D.setData(edf.getPhysicalSignalConcatRecords(i));
+        sig1D.setMetadata("numberOfRecords", nbRecords);
+        sig1D.setMetadata("patientID", edf.getPatientID());
+        sig1D.setMetadata("recordDuration", edf.getRecordDuration());
+        sig1D.setMetadata("recordingID", edf.getRecordingID());
+        sig1D.setMetadata("recordingStartDate", edf.getRecordingStartDate());
+        sig1D.setMetadata("reservedField", edf.getReservedField());
+        sig1D.setMetadata("signalLabel", edf.getSignalLabel(i));
+        sig1D.setMetadata("numberOfSamplesPerRecord", edf.getSignalNumberOfSamplesPerRecord(i));
+        sig1D.setMetadata("signalPhysicalMax", edf.getSignalPhysicalMax(i));
+        sig1D.setMetadata("signalPhysicalMin", edf.getSignalPhysicalMin(i));
+        sig1D.setMetadata("signalPhysicalUnit", edf.getSignalPhysicalUnit(i));
+        sig1D.setMetadata("signalPrefiltering", edf.getSignalPrefiltering(i));
+        sig1D.setMetadata("signalTransducerType", edf.getSignalTransducerType(i));
+        // the other metadata have the name of the field in the EDF file but this one is
+        // a standard from Signal1D
+        sig1D.setMetadata("samplingFrequency", edf.getSignalSamplingFrequency(i));
+
+        this._output[i] = sig1D;
+      }
+    }
+  }]);
+  return EdfDecoder$$1;
+}(Filter); /* END of class EdfDecoder */
+
 "use strict";
 
 function iota(n) {
@@ -58206,6 +61545,7 @@ var InverseFourierSignalFilter = function (_BaseFourierSignalFil2) {
  * Link     https://github.com/Pixpipe/pixpipejs
  * Lab      MCIN - Montreal Neurological Institute
  */
+
 var DIRECTIONS$1 = {
   'FORWARD': 1,
   'INVERSE': -1
@@ -58264,6 +61604,16 @@ var BaseFourierImageFilter = function (_Filter) {
   return BaseFourierImageFilter;
 }(Filter);
 
+/**
+* An instance of ForwardFourierImageFilter performs a forward Fourier transform
+* on an Image2D or a Signa1D.
+*
+* **Usage**
+* - [examples/fftImage2D.html](../examples/fftImage2D.html)
+* - [examples/fftSignal1D.html](../examples/fftSignal1D.html)
+*/
+
+
 var ForwardFourierImageFilter = function (_BaseFourierImageFilt) {
   inherits(ForwardFourierImageFilter, _BaseFourierImageFilt);
 
@@ -58274,6 +61624,16 @@ var ForwardFourierImageFilter = function (_BaseFourierImageFilt) {
 
   return ForwardFourierImageFilter;
 }(BaseFourierImageFilter);
+
+/**
+* An instance of ForwardFourierImageFilter performs an inverse Fourier transform
+* on an Image2D or a Signa1D.
+*
+* **Usage**
+* - [examples/fftImage2D.html](../examples/fftImage2D.html)
+* - [examples/fftSignal1D.html](../examples/fftSignal1D.html)
+*/
+
 
 var InverseFourierImageFilter = function (_BaseFourierImageFilt2) {
   inherits(InverseFourierImageFilter, _BaseFourierImageFilt2);
@@ -62173,6 +65533,372 @@ var PatchImageFilter = function (_ImageToImageFilter) {
   return PatchImageFilter;
 }(ImageToImageFilter); /* END of class PatchImageFilter */
 
+var asyncGenerator$5 = function () {
+  function AwaitValue(value) {
+    this.value = value;
+  }
+
+  function AsyncGenerator(gen) {
+    var front, back;
+
+    function send(key, arg) {
+      return new Promise(function (resolve, reject) {
+        var request = {
+          key: key,
+          arg: arg,
+          resolve: resolve,
+          reject: reject,
+          next: null
+        };
+
+        if (back) {
+          back = back.next = request;
+        } else {
+          front = back = request;
+          resume(key, arg);
+        }
+      });
+    }
+
+    function resume(key, arg) {
+      try {
+        var result = gen[key](arg);
+        var value = result.value;
+
+        if (value instanceof AwaitValue) {
+          Promise.resolve(value.value).then(function (arg) {
+            resume("next", arg);
+          }, function (arg) {
+            resume("throw", arg);
+          });
+        } else {
+          settle(result.done ? "return" : "normal", result.value);
+        }
+      } catch (err) {
+        settle("throw", err);
+      }
+    }
+
+    function settle(type, value) {
+      switch (type) {
+        case "return":
+          front.resolve({
+            value: value,
+            done: true
+          });
+          break;
+
+        case "throw":
+          front.reject(value);
+          break;
+
+        default:
+          front.resolve({
+            value: value,
+            done: false
+          });
+          break;
+      }
+
+      front = front.next;
+
+      if (front) {
+        resume(front.key, front.arg);
+      } else {
+        back = null;
+      }
+    }
+
+    this._invoke = send;
+
+    if (typeof gen.return !== "function") {
+      this.return = undefined;
+    }
+  }
+
+  if (typeof Symbol === "function" && Symbol.asyncIterator) {
+    AsyncGenerator.prototype[Symbol.asyncIterator] = function () {
+      return this;
+    };
+  }
+
+  AsyncGenerator.prototype.next = function (arg) {
+    return this._invoke("next", arg);
+  };
+
+  AsyncGenerator.prototype.throw = function (arg) {
+    return this._invoke("throw", arg);
+  };
+
+  AsyncGenerator.prototype.return = function (arg) {
+    return this._invoke("return", arg);
+  };
+
+  return {
+    wrap: function wrap(fn) {
+      return function () {
+        return new AsyncGenerator(fn.apply(this, arguments));
+      };
+    },
+    await: function _await(value) {
+      return new AwaitValue(value);
+    }
+  };
+}();
+
+var classCallCheck$5 = function classCallCheck(instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass$5 = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+/*
+* Author    Jonathan Lurie - http://me.jonathanlurie.fr
+* License   MIT
+* Link      https://github.com/jonathanlurie/differenceequationsignal1d
+* Lab       MCIN - http://mcin.ca/ - Montreal Neurological Institute
+*/
+
+var DifferenceEquationSignal1D$1 = function () {
+  function DifferenceEquationSignal1D() {
+    classCallCheck$5(this, DifferenceEquationSignal1D);
+
+    this._inputSignal = null;
+    this._outputSignal = null;
+    this._aCoefficients = null;
+    this._bCoefficients = null;
+    this._enableBackwardSecondPass = false;
+  }
+
+  /**
+  * Set the input signal. Will also reset the output to null.
+  * @param {Float32Array} signal - the signal
+  */
+
+  createClass$5(DifferenceEquationSignal1D, [{
+    key: "setInput",
+    value: function setInput(signal) {
+      this._outputSignal = null;
+      this._inputSignal = signal;
+    }
+
+    /**
+    * Set the array of 'a' coefficients. Must be padded by an additional "1.0" because
+    * this set of coefficient will be addressed at it index "1" ( and not "0")
+    * @param {Float32Array|Array} a - the 'a' coeficients
+    */
+
+  }, {
+    key: "setACoefficients",
+    value: function setACoefficients(a) {
+      this._aCoefficients = a;
+    }
+
+    /**
+    * Set the array of 'b' coefficients
+    * @param {Float32Array|Array} b - the 'b' coeficients
+    */
+
+  }, {
+    key: "setBCoefficients",
+    value: function setBCoefficients(b) {
+      this._bCoefficients = b;
+    }
+
+    /**
+    * Get the output signal
+    * @return {Float32Array} the filtered signal
+    */
+
+  }, {
+    key: "getOutput",
+    value: function getOutput() {
+      return this._outputSignal;
+    }
+
+    /**
+    * Will process the signal backwards as a second pass, using the same coeficients.
+    * This is to make sure the output remain in phase with the input
+    */
+
+  }, {
+    key: "enableBackwardSecondPass",
+    value: function enableBackwardSecondPass() {
+      this._enableBackwardSecondPass = true;
+    }
+
+    /**
+    * Will not process the signal backwards as a second pass.
+    * Depending on the coefficients, the output may not be in phase with the input.
+    */
+
+  }, {
+    key: "disableBackwardSecondPass",
+    value: function disableBackwardSecondPass() {
+      this._enableBackwardSecondPass = false;
+    }
+
+    /**
+    * Launch the filtering. In the end, get the output using the method `.getOutput()`
+    */
+
+  }, {
+    key: "run",
+    value: function run() {
+      var out = new Float32Array(this._inputSignal.length).fill(0);
+
+      // some shortcuts
+      var x = this._inputSignal;
+      var y = out;
+      var b = this._bCoefficients;
+      var a = this._aCoefficients;
+      var M = b.length - 1;
+      var N = a.length - 1;
+
+      function getOutputAt(n) {
+        var xSum = 0;
+        for (var i = 0; i <= M; i++) {
+          var safeSignaValue = i > n ? 0 : x[n - i];
+          xSum += b[i] * safeSignaValue;
+        }
+
+        // sum of the y 
+        var ySum = 0;
+        for (var j = 1; j <= N; j++) {
+          var safeSignaValue = j > n ? 0 : y[n - j];
+          ySum += a[j] * safeSignaValue;
+        }
+
+        var valueAtN = xSum - ySum;
+        return valueAtN;
+      }
+
+      for (var i = 0; i < out.length; i++) {
+        out[i] = getOutputAt(i);
+      }
+
+      if (this._enableBackwardSecondPass) {
+        out.reverse();
+        x = out;
+        out = new Float32Array(this._inputSignal.length).fill(0);
+        y = out;
+
+        for (var i = 0; i < out.length; i++) {
+          out[i] = getOutputAt(i);
+        }
+        out.reverse();
+      }
+
+      this._outputSignal = out;
+    }
+  }]);
+  return DifferenceEquationSignal1D;
+}(); /* END of class DifferenceEquationSignal1D */
+
+/*
+* Author   Jonathan Lurie - http://me.jonathanlurie.fr
+* License  MIT
+* Link      https://github.com/Pixpipe/pixpipejs
+* Lab       MCIN - Montreal Neurological Institute
+*/
+
+/**
+* Performs a difference equation (= discrete version of a differential equation)
+* on a Signal1D object. This is convenient to perform a lo-pass or hi-pass filter.
+* Coefficients are needed to run this filter, set them using
+* the following methods: `.setMetadata("coefficientsB", [Number, Number, ...])` and
+* `.setMetadata("coefficientsB", [Number, Number, ...])`. This is related to the
+* following:  
+* ![](https://raw.githubusercontent.com/Pixpipe/differenceequationsignal1d/master/images/definition.png)  
+* Where coeefticients A and B are array of the same size, knowing the first number
+* of the array coefficients A will not be used (just set it to `1.0`).  
+* more information on the [module repo](https://github.com/Pixpipe/differenceequationsignal1d) 
+* and even more on the original [description page](https://www.dsprelated.com/freebooks/filters/Difference_Equation_I.html).
+*
+*
+* **Usage**
+* - [examples/differenceEqSignal1D.html](../examples/differenceEqSignal1D.html)
+*
+*/
+
+var DifferenceEquationSignal1D$$1 = function (_Filter) {
+  inherits(DifferenceEquationSignal1D$$1, _Filter);
+
+  function DifferenceEquationSignal1D$$1() {
+    classCallCheck(this, DifferenceEquationSignal1D$$1);
+
+    var _this = possibleConstructorReturn(this, (DifferenceEquationSignal1D$$1.__proto__ || Object.getPrototypeOf(DifferenceEquationSignal1D$$1)).call(this));
+
+    _this.addInputValidator(0, Signal1D);
+    _this.setMetadata("coefficientsB", null);
+    _this.setMetadata("coefficientsA", null);
+    _this.setMetadata("enableBackwardSecondPass", true);
+
+    return _this;
+  }
+
+  createClass(DifferenceEquationSignal1D$$1, [{
+    key: '_run',
+    value: function _run() {
+      if (!this.hasValidInput()) {
+        return;
+      }
+
+      var input = this._getInput(0);
+      var coefficientsB = this.getMetadata("coefficientsB");
+      var coefficientsA = this.getMetadata("coefficientsA");
+      var backwardSecondPass = this.getMetadata("enableBackwardSecondPass");
+
+      if (!coefficientsA || !coefficientsB) {
+        console.warn("Both 'coefficientsB' and 'coefficientsA' metadata must be set to arrays of numbers.");
+        return;
+      }
+
+      if (coefficientsA.length != coefficientsB.length) {
+        console.warn("The 'coefficientsB' and 'coefficientsA' metadata must be arrays of the same size.");
+        return;
+      }
+
+      var filter = new DifferenceEquationSignal1D$1();
+
+      if (backwardSecondPass) filter.enableBackwardSecondPass();
+
+      filter.setInput(input.getData());
+      filter.setACoefficients(coefficientsA);
+      filter.setBCoefficients(coefficientsB);
+      filter.run();
+
+      var outRaw = filter.getOutput();
+
+      if (outRaw) {
+        var out = new Signal1D();
+        out.copyMetadataFrom(input);
+        out.setData(outRaw);
+        this._output[0] = out;
+      }
+    }
+  }]);
+  return DifferenceEquationSignal1D$$1;
+}(Filter); /* END of class DifferenceEquationSignal1D */
+
 /*
 * Author   Jonathan Lurie - http://me.jonathanlurie.fr
 * License  MIT
@@ -63256,6 +66982,7 @@ exports.ImageToImageFilter = ImageToImageFilter;
 exports.MniVolume = MniVolume;
 exports.LineString = LineString;
 exports.Image3DAlt = Image3DAlt;
+exports.Mesh3D = Mesh3D;
 exports.CanvasImageWriter = CanvasImageWriter;
 exports.UrlImageReader = UrlImageReader;
 exports.FileImageReader = FileImageReader;
@@ -63279,6 +67006,8 @@ exports.JpegDecoder = JpegDecoder;
 exports.PngDecoder = PngDecoder;
 exports.Image2DGenericDecoder = Image2DGenericDecoder;
 exports.Minc2DecoderAlt = Minc2DecoderAlt;
+exports.MniObjDecoder = MniObjDecoder;
+exports.EdfDecoder = EdfDecoder$$1;
 exports.ComponentProjectionImage2DFilter = ComponentProjectionImage2DFilter;
 exports.ComponentMergeImage2DFilter = ComponentMergeImage2DFilter;
 exports.ForwardFourierSignalFilter = ForwardFourierSignalFilter;
@@ -63305,6 +67034,7 @@ exports.TriangulationSparseInterpolationImageFilter = TriangulationSparseInterpo
 exports.CropImageFilter = CropImageFilter;
 exports.SimplifyLineStringFilter = SimplifyLineStringFilter;
 exports.PatchImageFilter = PatchImageFilter;
+exports.DifferenceEquationSignal1D = DifferenceEquationSignal1D$$1;
 exports.AngleToHueWheelHelper = AngleToHueWheelHelper;
 exports.LineStringPrinterOnImage2DHelper = LineStringPrinterOnImage2DHelper;
 exports.Colormap = Colormap;

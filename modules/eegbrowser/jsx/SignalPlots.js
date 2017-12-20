@@ -1,0 +1,225 @@
+import React, { Component } from 'react';
+import { withPromise } from './withPromise';
+import { SignalPlot } from './SignalPlot';
+import { SignalProcessingSelect } from './SignalProcessingSelect';
+
+import { LOW_PASS_FILTERS, HIGH_PASS_FILTERS } from './Filters';
+
+const ZOOM_AMOUNT = 1;
+const INTERVAL_MOVE_AMOUNT = 1;
+const PLOTS_PER_GROUP = 7;
+const PLOT_HEIGHT = 90;
+const Y_BOUNDS = { ymin: -250, ymax: 250 };
+const Y_WIDTH = 60;
+
+const countNumChannels = regions => regions.map(r => r.channels.length).reduce((a,b) => a + b, 0);
+
+const PromisedSignalPlot = withPromise(SignalPlot);
+
+export class SignalPlots extends Component {
+  constructor(props) {
+    super(props);
+    this.lastMouseX = null;
+    this.drawn = [];
+    this.state = {
+      cursorT: null,
+      group: 0,
+      tBounds: { tmin: -0.1, tmax: 20 },
+      yBounds: {},
+      filters: { low: 'none', hi: 'none' }
+    };
+  }
+  componentWillReceiveProps(nextProps) {
+    const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
+    const numChannels = countNumChannels(nextProps.selected);
+    const newGroup = minPlot > numChannels ? Math.floor(numChannels / PLOTS_PER_GROUP) : this.state.group;
+    this.setState({ group : newGroup });
+  }
+  componentDidMount() {
+    this.resizeUpdate = () => { this.forceUpdate(); };
+    window.addEventListener('resize', this.resizeUpdate);
+    // If user mouses up anywhere in the browser window stop translating time interval.
+    window.addEventListener('mouseup', () => { this.lastMouseX = null; });
+  }
+  componentWillUnmount() {
+    window.removeEveEventListener('resize', this.resizeUpdate);
+  }
+  generatePlotElements(minPlot, maxPlot) {
+    const plotElements = [];
+    let index = 0;
+    this.props.selected.forEach((region) => {
+      region.channels.forEach((channel) => {
+        const {low, hi} = this.state.filters;
+        channel.applyFilter(low, hi, () => this.forceUpdate());
+        const axisProps = {
+          drawXAxis: false,
+          xAxisLabel: 'time (sec)',
+          yAxisLabel: 'uV',
+        };
+        if (index === minPlot) {
+          axisProps.drawXAxis = true;
+          axisProps.xAxisOrientation = 'top';
+          axisProps.xAxisLabelPos = null;
+          axisProps.yAxisLabelPos = { x: -23, y: 10 };
+        }
+        if (index === maxPlot) {
+          axisProps.drawXAxis = true;
+          axisProps.xAxisOrientation = 'bottom';
+          axisProps.xAxisLabelPos = { x: 5, y: 28 };
+          axisProps.yAxisLabelPos = { x: -23, y: 7 };
+        }
+        if (index >= minPlot && index <= maxPlot) {
+          const zoom = (leftClick, multiplier) => {
+            if (leftClick) {
+              this.state.yBounds[channel.name] = this.state.yBounds[channel.name] || Y_BOUNDS;
+              let { ymin, ymax } = this.state.yBounds[channel.name];
+              ymin *= multiplier;
+              ymax *= multiplier;
+              this.state.yBounds[channel.name] = { ymin, ymax };
+              this.setState({ yBounds: this.state.yBounds });
+            }
+          };
+          const { ymin, ymax } = this.state.yBounds[channel.name] || Y_BOUNDS;
+          plotElements.push(
+            <PromisedSignalPlot
+              runPromise={() => channel.fetch()}
+              key={index}
+              className='signal-plot-item'
+              channel={channel}
+              colorCode={region.colorCode}
+              height={PLOT_HEIGHT}
+              yAxisWidth={Y_WIDTH}
+              tBounds={this.state.tBounds}
+              yBounds={{ ymin, ymax }}
+              onPlus={(e) => { e.stopPropagation(); zoom(e.button === 0, 0.9); }}
+              onMinus={(e) => { e.stopPropagation(); zoom(e.button === 0, 1.1); }}
+              backgroundColor={index % 2 === 0 ? '#fff' : '#eee'}
+              cursorT={this.state.cursorT}
+              drawXAxis={axisProps.drawXAxis}
+              xAxisOrientation={axisProps.xAxisOrientation}
+              xAxisLabel={axisProps.xAxisLabel}
+              xAxisLabelPos={axisProps.xAxisLabelPos}
+              yAxisLabel={axisProps.yAxisLabel}
+              yAxisLabelPos={axisProps.yAxisLabelPos}
+            />
+          );
+        }
+        index++;
+      });
+    });
+    return plotElements;
+  }
+  render() {
+    const numChannels = countNumChannels(this.props.selected);
+    const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
+    let maxPlot = (PLOTS_PER_GROUP - 1) * (this.state.group + 1);
+    const showNext = maxPlot < numChannels
+    const showPrev = this.state.group > 0;
+    if (minPlot + PLOTS_PER_GROUP > numChannels) {
+      maxPlot = Math.min(minPlot + PLOTS_PER_GROUP, numChannels) - 1;
+    }
+    const onWheel = (dy) => {
+      const { tmin, tmax } = this.state.tBounds;
+      if (tmax - tmin <= 0.5 && dy < 0) {
+        return;
+      }
+      if (tmax - tmin >= 25 && dy > 0) {
+        return;
+      }
+      this.setState({
+        tBounds: {
+          tmin: tmin - Math.sign(dy) * ZOOM_AMOUNT * (tmax - tmin) / 15,
+          tmax: tmax + Math.sign(dy) * ZOOM_AMOUNT * (tmax - tmin) / 15
+        }
+      });
+    };
+    const onMouseMove = (shift, leftClick, x) => {
+      if (!this.lastMouseX) {
+        this.lastMouseX = x;
+        return;
+      }
+      if (!this.container) {
+        return;
+      }
+      const { width, left } = this.container.getBoundingClientRect();
+      const { tmin, tmax } = this.state.tBounds;
+      const dx = x - this.lastMouseX;
+      this.lastMouseX = x;
+      if (shift && leftClick) {
+        this.setState({
+          tBounds: {
+            tmin: tmin - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width,
+            tmax: tmax - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width
+          }
+        });
+      }
+      if (!shift && leftClick) {
+        const tInv = d3.scale.linear()
+                       .domain([Y_WIDTH, width - Y_WIDTH / 4])
+                       .range([tmin, tmax]);
+        if (x - left > Y_WIDTH) {
+          this.setState({ cursorT: tInv(x - left) });
+        }
+      }
+    };
+    const selectLow = (value) => {
+      this.setState({ filters: { low: value, hi: this.state.filters.hi } });
+    };
+    const selectHi = (value) => {
+      this.setState({ filters: { low: this.state.filters.low, hi: value } });
+    };
+    const enabled = (text, incr) => (
+      <div
+        className="round-button"
+        onClick={() => { this.setState({ group: this.state.group + incr }); }}
+      >
+        {text}
+      </div>
+    );
+    const disabled = text => (
+      <div className="round-button disabled">
+        {text}
+      </div>
+    );
+    const showingPlots = (
+      <div className="signal-plots-group-number">
+        Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numChannels}
+      </div>
+    );
+    const plotElements = this.generatePlotElements(minPlot, maxPlot);
+    return (
+      <div className="signal-plots-container">
+        <div className="toolbar">
+          <div className="toolbar-layer">
+            <div className="toolbar-buttons">
+              {showPrev ? enabled('Previous', -1) : disabled('Previous')}
+              {showNext ? enabled('Next', +1) : disabled('Next')}
+              {numChannels > 0 ? showingPlots : null}
+            </div>
+          </div>
+          <div className="toolbar-layer">
+            <div
+              className="round-button"
+              onClick={() => { this.setState({ yBounds: {} }); }}
+            >
+              Reset Y Zoom
+            </div>
+            <div className="signal-plots-filters">
+              <SignalProcessingSelect filters={LOW_PASS_FILTERS} filter={this.state.filters.low} onChange={selectLow} />
+              <SignalProcessingSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
+            </div>
+          </div>
+        </div>
+        <div
+          className="signal-plots"
+          ref={(container) => { this.container = container; }}
+          onWheel={(e) => { if (e.shiftKey) { e.preventDefault(); onWheel(e.deltaY); } }}
+          onMouseMove={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}
+          onMouseDown={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}
+        >
+          {plotElements}
+        </div>
+      </div>
+    );
+  }
+}
