@@ -37,10 +37,10 @@ export class SignalSelectionFilter extends Component {
       <span className='tag-remove-button' onClick={() => removeTag(tagKey, tag)}>x</span>
     );
     const tagElements = [];
-    Object.keys(this.state.tags).forEach((key) => {
+    Object.keys(this.state.tags).forEach((key, i) => {
       const tags = this.state.tags[key];
       const tagElems = tags.map(tag => (
-        <span key={tag.optionLabel} className="selection-filter-tag">
+        <span key={tag.optionLabel + String(i)} className="selection-filter-tag">
           {tag.label}: {tag.optionLabel} {tagRemover(key, tag)}
         </span>
       ));

@@ -20,17 +20,18 @@ export default class EEGBrowser extends Component {
     };
   }
   render() {
-    const unselectRegion = (region) => {
+
+    const selectRegions = (regions) => {
       this.setState({
         selected: this.state.selected
-          .filter(r => r !== region) // remove all regions equal to the unselected.
+          .filter(r => !regions.includes(r))
+          .concat(regions)
       });
     };
-    const selectRegion = (region) => {
+    const unselectRegions = (regions) => {
       this.setState({
         selected: this.state.selected
-          .filter(r => r !== region) // remove refferentially identical duplicates.
-          .concat([region]) // select the region
+          .filter(r => !regions.includes(r))
       });
     };
     const expandBar = (
@@ -45,15 +46,15 @@ export default class EEGBrowser extends Component {
       <RegionSelect
         brain={this.state.brain}
         selected={this.state.selected}
-        unselectRegion={unselectRegion}
-        selectRegion={selectRegion}
+        unselectRegions={unselectRegions}
+        selectRegions={selectRegions}
         hoverRegions={(regions) => { this.setState({ hoveredRegions: regions }); }}
         onMouseLeave={() => { this.setState({ hoveredRegions: [] }); }}
       >
       </RegionSelect>
     );
     const leaves = getLeafRegions(this.state.brain);
-    const mriView = ('' /*
+    const mriView = (
       <MRIViewer
         regions={leaves}
         selected={this.state.selected}
@@ -61,13 +62,13 @@ export default class EEGBrowser extends Component {
         showMRI={!this.state.expanded}
       >
       </MRIViewer>
-    */);
+    );
     return (
       <div className="eeg-browser">
         <div className="eeg-browser-row">
           <SignalSelectionFilter
             selectedRegions={this.state.selected}
-            onRemoveRegion={unselectRegion}
+            onRemoveRegion={region => unselectRegions([regions])}
           >
           </SignalSelectionFilter>
         </div>
@@ -86,11 +87,11 @@ export default class EEGBrowser extends Component {
 }
 
 const PromisedEEGBrowser = withPromise(EEGBrowser, {
-  resolved2Props: brain => ({
+  resolved2Props: res => ({
     brain: {
       type: 'Inner',
       label: 'Brain',
-      value: brain
+      value: res
     }
   })
 });

@@ -309,7 +309,6 @@ export class SignalPlot extends Component {
     const regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode);
     const self = this;
     const channelName = g.append('text')
-                         .attr('class', 'channel-link')
                          .attr('x', 105)
                          .attr('y', height - 6)
                          .attr('font-size', 13);
@@ -368,8 +367,9 @@ export class SignalPlot extends Component {
         </svg>
         <a
           className="channel-link"
-          href={`eegbrowser/ajax/GetChannel.php?channelname=${this.props.channel.name}`}
+          href={`${loris.BaseURL}/${loris.TestName}/GetChannel.php?channelname=${this.props.channel.name}`}
           ref={(link) => { this.link = link; }}
+          onMouseDown={(e) => { e.stopPropagation(); } }
         >
           {this.props.channel.name}
         </a>

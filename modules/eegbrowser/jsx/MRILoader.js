@@ -1,8 +1,8 @@
 import ShaderManager from './shader/ShaderManager';
 import MRIOverlay from './shader/MRIOverlay';
 
-const MODEL_URL = 'eegbrowser/static/model_mni.nii.gz';
-const LABEL_URL = 'eegbrowser/static/labels_mni.nii.gz';
+const MODEL_URL = `${loris.BaseURL}/${loris.TestName}/static/model_mni.nii.gz`;
+const LABEL_URL = `${loris.BaseURL}/${loris.TestName}/static/labels_mni.nii.gz`;
 
 export default class MRILoader {
   constructor(scene) {
@@ -10,7 +10,7 @@ export default class MRILoader {
     this.shaderManager = new ShaderManager();
     this.colorMapper = new pixpipe.Colormap()
     this.colorMapper.setStyle('jet')
-    this.colorMapper.buildLut(300)
+    this.colorMapper.buildLut(39)
   }
   initialize() {
     const promise =
@@ -62,18 +62,18 @@ export default class MRILoader {
     });
   }
   createMRIPlanes() {
-    const system = new THREE.Object3D();
+    this.system = new THREE.Object3D();
     let plane = new THREE.Mesh();
     this.shaderManager.shadePlane(plane);
-    system.add(plane);
+    this.system.add(plane);
     plane = new THREE.Mesh();
     plane.rotation.y = Math.PI / 2;
     this.shaderManager.shadePlane(plane);
-    system.add(plane);
+    this.system.add(plane);
     plane = new THREE.Mesh();
     this.shaderManager.shadePlane(plane);
     plane.rotation.x = Math.PI / 2;
-    system.add(plane);
-    this.scene.add(system);
+    this.system.add(plane);
+    this.scene.add(this.system);
   }
 }

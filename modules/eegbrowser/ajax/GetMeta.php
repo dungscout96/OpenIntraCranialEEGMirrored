@@ -55,7 +55,7 @@ class Channel {
     public $lobeName = "";
     public $oneCPPPR = "";
     public $nonRepeated = "";
-    public $position = array("x" => 0, "y" => 0, "z" => 0);
+    public $position = array(0, 0, 0);
 }
 
 function computeSignalMeta() {
@@ -151,9 +151,9 @@ function channelFromRow($header, $row) {
     $channel->oneCPPPR = (bool)$row[$header["OneContactPerPatientPerRegion"]];
     $channel->nonRepeated = (bool)$row[$header["NotRepeatedContacts"]];
     $channel->position = array(
-        "x" => (int)$row[$header["x"]],
-        "y" => (int)$row[$header["y"]],
-        "z" => (int)$row[$header["z"]]
+        (int)$row[$header["x"]],
+        (int)$row[$header["y"]],
+        (int)$row[$header["z"]]
     );
     return $channel;
 }

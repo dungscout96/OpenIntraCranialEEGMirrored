@@ -17377,13 +17377,13 @@ var Image3DAlt = function (_PixpipeContainer) {
 
   }, {
     key: 'getTransfoBox',
-    value: function getTransfoBox(transformName) {
+    value: function getTransfoBox(space2voxelTransformName) {
       if (!this.hasTransform(space2voxelTransformName)) {
         console.warn('The transform ' + transformName + ' is not available.');
         return null;
       }
 
-      var corners = this.getTransfoVolumeCorners();
+      var corners = this.getTransfoVolumeCorners(space2voxelTransformName);
       var min$$1 = {
         x: +Infinity,
         y: +Infinity,

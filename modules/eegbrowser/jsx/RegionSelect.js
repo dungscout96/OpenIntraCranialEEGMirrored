@@ -48,12 +48,29 @@ export class RegionSelect extends Component {
     };
     const renderRegionSelector = (region) => {
       if (this.props.selected.find(r => r === region)) {
-        return renderRegionElement(region, true, this.props.unselectRegion);
+        return renderRegionElement(region, true, r => this.props.unselectRegions([r]));
       }
-      return renderRegionElement(region, false, this.props.selectRegion);
+      return renderRegionElement(region, false, r => this.props.selectRegions([r]));
     };
     const renderInnerNode = (node) => {
         const regions = getLeafRegions(node);
+        const onAllClick = (event) => {
+          event.stopPropagation();
+          const contained = regions.map(r => this.props.selected.includes(r)).reduce((a, b) => a && (!!b), true);
+          if (contained) {
+            this.props.unselectRegions(regions);
+          } else {
+            this.props.selectRegions(regions);
+          }
+        };
+        const allButton = (
+          <div
+            className="round-button" style={{display: 'inline'}}
+            onClick={onAllClick}
+          >
+            All
+          </div>
+        );
         return (
           <li
             key={node.label}
@@ -62,7 +79,7 @@ export class RegionSelect extends Component {
             onMouseEnter={() => { this.props.hoverRegions(regions); }}
             onMouseLeave={this.props.onMouseLeave}
           >
-            {node.label}
+            {node.label} {allButton}
           </li>
       );
     };

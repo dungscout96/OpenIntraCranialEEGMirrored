@@ -81,11 +81,20 @@ export class Channel {
   }
 }
 
+const colorMapper = new pixpipe.Colormap()
+colorMapper.setStyle('jet')
+colorMapper.buildLut(39)
+
 export class Region {
-  constructor(name, channelMetas, colorCode = { r: 0, g: 0, b: 0 }) {
+  constructor(name, channelMetas) {
     this.name = name;
     this.label = name;
-    this.colorCode = colorCode;
+    this.colorCode = { r: 0, g: 0, b: 0 };
+    this.regionID = channelMetas[0] ? channelMetas[0].regionID : null;
+    if (this.regionID) {
+      const color = colorMapper.getLutAt(this.regionID);
+      this.colorCode = { r: color[0], g: color[1], b: color[2] };
+    }
     this.channels = channelMetas.map(channel => new Channel(channel));
   }
 }
@@ -100,11 +109,15 @@ export const getLeafRegions = (node) => {
   return [];
 };
 
-export const instantiateRegions = (node) => {
+
+export const instantiateRegions = (node, path = []) => {
   if (node.value.length > 0 && node.value[0].type === 'Leaf') {
     node.type = 'Leaf';
-    node.value = node.value.map(region => new Region(region.label, region.value));
+    node.value = node.value.map(region => {
+      const label = path[0].label + ' ' + region.label;
+      return new Region(label, region.value);
+    });
     return;
   }
-  node.value.forEach(instantiateRegions);
+  node.value.forEach(node => instantiateRegions(node, path.concat([node])));
 };
