@@ -367,11 +367,11 @@ export class SignalPlot extends Component {
         </svg>
         <a
           className="channel-link"
-          href={`${loris.BaseURL}/${loris.TestName}/GetChannel.php?channelname=${this.props.channel.name}`}
+          href={`${loris.BaseURL}/${loris.TestName}/GetChannel.php?channelname=${this.props.channel.metaData.name}`}
           ref={(link) => { this.link = link; }}
           onMouseDown={(e) => { e.stopPropagation(); } }
         >
-          {this.props.channel.name}
+          {this.props.channel.metaData.name}
         </a>
      </div>
     );

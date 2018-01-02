@@ -3,8 +3,8 @@ import MRILoader from './MRILoader';
 
 const MESH_SIZE = 1/80;
 
-const YELLOW = 0xFF6628;
 const GREEN = 0x34A853;
+const GRAY = 0x333333;
 const BLUE = 0x4285F4;
 export class MRIViewer extends Component {
   constructor(props) {
@@ -74,13 +74,13 @@ export class MRIViewer extends Component {
       const diagonal = dimensions.length();
       this.camera.position.z = diagonal;
       this.camera.lookAt(new THREE.Vector3(0, 0, 0));
-      const material = new THREE.MeshBasicMaterial({ color: YELLOW });
+      const material = new THREE.MeshBasicMaterial({ color: GRAY });
       const geometry = new THREE.SphereBufferGeometry(MESH_SIZE * scale, 8, 8);
       this.props.regions.forEach((region, i) => {
         region.channels.forEach((channel) => {
           const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
           mesh.material.copy(material)
-          mesh.position.fromArray(channel.position);
+          mesh.position.fromArray(channel.metaData.position);
           this.scene.add(mesh);
           if (!this.meshes[i]) {
             this.meshes[i] = [];
@@ -96,7 +96,7 @@ export class MRIViewer extends Component {
     this.props.regions.forEach((region, i) => {
       region.channels.forEach((channel) => {
         if (this.meshes[i]) {
-          this.meshes[i].forEach(m => { m.material.color.setHex(YELLOW); });
+          this.meshes[i].forEach(m => { m.material.color.setHex(GRAY); });
           if (this.props.selected.find(r => r === region)) {
             this.meshes[i].forEach(m => { m.material.color.setHex(GREEN); });
           }

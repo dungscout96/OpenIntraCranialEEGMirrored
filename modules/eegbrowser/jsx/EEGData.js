@@ -6,7 +6,7 @@ const SAMPLES_PER_POINT = 200*60;
 
 export class Channel {
   constructor(metaData, tmin=0, tmax=60) {
-    Object.assign(this, metaData);
+    this.metaData = metaData;
     this.tmin = tmin;
     this.tmax = tmax;
     this.hovered = false;
@@ -18,7 +18,7 @@ export class Channel {
     if (this.promise) {
       return this.promise;
     }
-    this.promise = fetch(`${loris.BaseURL}/${loris.TestName}/ajax/GetChannel.php?channelname=${this.name}`, { credentials: 'include' })
+    this.promise = fetch(`${loris.BaseURL}/${loris.TestName}/ajax/GetChannel.php?channelname=${this.metaData.name}`, { credentials: 'include' })
       .then(res => {
         if (res.status !== 200) {
           throw new Error(`Failed withs status ${res.status}`);
@@ -79,11 +79,21 @@ export class Channel {
     doFilterUpdate(FILTERS[lowPassFilterName], this.originalSignal);
     doFilterUpdate(FILTERS[highPassFilterName], this.signal);
   }
+  testSelectionFilters(filters) {
+    if (filters.length === 0) {
+      return true;
+    }
+    return filters.some(filter => this.metaData[filter.key] === filter.value);
+  }
 }
 
 const colorMapper = new pixpipe.Colormap()
 colorMapper.setStyle('jet')
 colorMapper.buildLut(39)
+
+export const filterChannels = (filters, regions) => regions
+  .map(r => r.channels.filter(channel => channel.testSelectionFilters(filters)))
+  .reduce((a,b) => b.concat(a), []);
 
 export class Region {
   constructor(name, channelMetas) {
@@ -96,6 +106,7 @@ export class Region {
       this.colorCode = { r: color[0], g: color[1], b: color[2] };
     }
     this.channels = channelMetas.map(channel => new Channel(channel));
+    this.channels.forEach(c => { c.colorCode = this.colorCode; });
   }
 }
 

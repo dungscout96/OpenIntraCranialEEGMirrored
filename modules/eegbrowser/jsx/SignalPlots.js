@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import { withPromise } from './withPromise';
 import { SignalPlot } from './SignalPlot';
 import { SignalProcessingSelect } from './SignalProcessingSelect';
+import { filterChannels } from './EEGData';
 
 import { LOW_PASS_FILTERS, HIGH_PASS_FILTERS } from './Filters';
 
@@ -12,7 +13,6 @@ const PLOT_HEIGHT = 90;
 const Y_BOUNDS = { ymin: -250, ymax: 250 };
 const Y_WIDTH = 60;
 
-const countNumChannels = regions => regions.map(r => r.channels.length).reduce((a,b) => a + b, 0);
 
 const PromisedSignalPlot = withPromise(SignalPlot);
 
@@ -31,7 +31,7 @@ export class SignalPlots extends Component {
   }
   componentWillReceiveProps(nextProps) {
     const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
-    const numChannels = countNumChannels(nextProps.selected);
+    const numChannels = filterChannels(nextProps.signalSelectFilters, nextProps.selected).length;
     const newGroup = minPlot > numChannels ? Math.floor(numChannels / PLOTS_PER_GROUP) : this.state.group;
     this.setState({ group : newGroup });
   }
@@ -44,80 +44,70 @@ export class SignalPlots extends Component {
   componentWillUnmount() {
     window.removeEveEventListener('resize', this.resizeUpdate);
   }
-  generatePlotElements(minPlot, maxPlot) {
+  generatePlotElements(channels, minPlot, maxPlot) {
     const plotElements = [];
     let index = 0;
-    this.props.selected.forEach((region) => {
-      region.channels.forEach((channel) => {
-        const {low, hi} = this.state.filters;
-        channel.applyFilter(low, hi, () => this.forceUpdate());
-        const axisProps = {
-          drawXAxis: false,
-          xAxisLabel: 'time (sec)',
-          yAxisLabel: 'uV',
+    channels.forEach((channel) => {
+      const {low, hi} = this.state.filters;
+      channel.applyFilter(low, hi, () => this.forceUpdate());
+      const axisProps = {
+        drawXAxis: false,
+        xAxisLabel: 'time (sec)',
+        yAxisLabel: 'uV',
+      };
+      if (index === minPlot) {
+        axisProps.drawXAxis = true;
+        axisProps.xAxisOrientation = 'top';
+        axisProps.xAxisLabelPos = null;
+        axisProps.yAxisLabelPos = { x: -23, y: 10 };
+      }
+      if (index === maxPlot) {
+        axisProps.drawXAxis = true;
+        axisProps.xAxisOrientation = 'bottom';
+        axisProps.xAxisLabelPos = { x: 5, y: 28 };
+        axisProps.yAxisLabelPos = { x: -23, y: 7 };
+      }
+      if (index >= minPlot && index <= maxPlot) {
+        const zoom = (leftClick, multiplier) => {
+          if (leftClick) {
+            this.state.yBounds[channel.metaData.name] = this.state.yBounds[channel.metaData.name] || Y_BOUNDS;
+            let { ymin, ymax } = this.state.yBounds[channel.metaData.name];
+            ymin *= multiplier;
+            ymax *= multiplier;
+            this.state.yBounds[channel.metaData.name] = { ymin, ymax };
+            this.setState({ yBounds: this.state.yBounds });
+          }
         };
-        if (index === minPlot) {
-          axisProps.drawXAxis = true;
-          axisProps.xAxisOrientation = 'top';
-          axisProps.xAxisLabelPos = null;
-          axisProps.yAxisLabelPos = { x: -23, y: 10 };
-        }
-        if (index === maxPlot) {
-          axisProps.drawXAxis = true;
-          axisProps.xAxisOrientation = 'bottom';
-          axisProps.xAxisLabelPos = { x: 5, y: 28 };
-          axisProps.yAxisLabelPos = { x: -23, y: 7 };
-        }
-        if (index >= minPlot && index <= maxPlot) {
-          const zoom = (leftClick, multiplier) => {
-            if (leftClick) {
-              this.state.yBounds[channel.name] = this.state.yBounds[channel.name] || Y_BOUNDS;
-              let { ymin, ymax } = this.state.yBounds[channel.name];
-              ymin *= multiplier;
-              ymax *= multiplier;
-              this.state.yBounds[channel.name] = { ymin, ymax };
-              this.setState({ yBounds: this.state.yBounds });
-            }
-          };
-          const { ymin, ymax } = this.state.yBounds[channel.name] || Y_BOUNDS;
-          plotElements.push(
-            <PromisedSignalPlot
-              runPromise={() => channel.fetch()}
-              key={index}
-              className='signal-plot-item'
-              channel={channel}
-              colorCode={region.colorCode}
-              height={PLOT_HEIGHT}
-              yAxisWidth={Y_WIDTH}
-              tBounds={this.state.tBounds}
-              yBounds={{ ymin, ymax }}
-              onPlus={(e) => { e.stopPropagation(); zoom(e.button === 0, 0.9); }}
-              onMinus={(e) => { e.stopPropagation(); zoom(e.button === 0, 1.1); }}
-              backgroundColor={index % 2 === 0 ? '#fff' : '#eee'}
-              cursorT={this.state.cursorT}
-              drawXAxis={axisProps.drawXAxis}
-              xAxisOrientation={axisProps.xAxisOrientation}
-              xAxisLabel={axisProps.xAxisLabel}
-              xAxisLabelPos={axisProps.xAxisLabelPos}
-              yAxisLabel={axisProps.yAxisLabel}
-              yAxisLabelPos={axisProps.yAxisLabelPos}
-            />
-          );
-        }
-        index++;
-      });
+        const { ymin, ymax } = this.state.yBounds[channel.metaData.name] || Y_BOUNDS;
+        plotElements.push(
+          <PromisedSignalPlot
+            runPromise={() => channel.fetch()}
+            key={index}
+            className='signal-plot-item'
+            channel={channel}
+            colorCode={channel.colorCode}
+            height={PLOT_HEIGHT}
+            yAxisWidth={Y_WIDTH}
+            tBounds={this.state.tBounds}
+            yBounds={{ ymin, ymax }}
+            onPlus={(e) => { e.stopPropagation(); zoom(e.button === 0, 0.9); }}
+            onMinus={(e) => { e.stopPropagation(); zoom(e.button === 0, 1.1); }}
+            backgroundColor={index % 2 === 0 ? '#fff' : '#eee'}
+            cursorT={this.state.cursorT}
+            drawXAxis={axisProps.drawXAxis}
+            xAxisOrientation={axisProps.xAxisOrientation}
+            xAxisLabel={axisProps.xAxisLabel}
+            xAxisLabelPos={axisProps.xAxisLabelPos}
+            yAxisLabel={axisProps.yAxisLabel}
+            yAxisLabelPos={axisProps.yAxisLabelPos}
+          />
+        );
+      }
+      index++;
     });
     return plotElements;
   }
   render() {
-    const numChannels = countNumChannels(this.props.selected);
-    const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
-    let maxPlot = (PLOTS_PER_GROUP - 1) * (this.state.group + 1);
-    const showNext = maxPlot < numChannels
-    const showPrev = this.state.group > 0;
-    if (minPlot + PLOTS_PER_GROUP > numChannels) {
-      maxPlot = Math.min(minPlot + PLOTS_PER_GROUP, numChannels) - 1;
-    }
     const onWheel = (dy) => {
       const { tmin, tmax } = this.state.tBounds;
       if (tmax - tmin <= 0.5 && dy < 0) {
@@ -181,12 +171,21 @@ export class SignalPlots extends Component {
         {text}
       </div>
     );
+    const filtered = filterChannels(this.props.signalSelectFilters, this.props.selected);
+    const minPlot = (PLOTS_PER_GROUP - 1) * this.state.group;
+    let maxPlot = (PLOTS_PER_GROUP - 1) * (this.state.group + 1);
+    let numChannels = filtered.length;
+    const showNext = maxPlot < numChannels;
+    const showPrev = this.state.group > 0;
+    if (minPlot + PLOTS_PER_GROUP > numChannels) {
+      maxPlot = Math.min(minPlot + PLOTS_PER_GROUP, numChannels) - 1;
+    }
+    const plotElements = this.generatePlotElements(filtered, minPlot, maxPlot);
     const showingPlots = (
       <div className="signal-plots-group-number">
         Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numChannels}
       </div>
     );
-    const plotElements = this.generatePlotElements(minPlot, maxPlot);
     return (
       <div className="signal-plots-container">
         <div className="toolbar">

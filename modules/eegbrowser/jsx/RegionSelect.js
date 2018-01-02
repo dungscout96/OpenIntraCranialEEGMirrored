@@ -21,6 +21,9 @@ export class RegionSelect extends Component {
       this.setState({ activePage: node, pageStack });
     };
     const back = () => {
+      if (this.state.pageStack.length === 0) {
+        return;
+      }
       const activePage = this.state.pageStack.pop();
       this.setState({
         activePage,
@@ -95,6 +98,7 @@ export class RegionSelect extends Component {
       }
       return null;
     };
+
     return (
       <div className="region-select">
         <div className="toolbar">

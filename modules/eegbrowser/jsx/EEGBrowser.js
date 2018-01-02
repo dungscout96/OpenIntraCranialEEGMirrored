@@ -14,13 +14,13 @@ export default class EEGBrowser extends Component {
     instantiateRegions(brain);
     this.state = {
       brain,
-      selected: [brain.value[0].value[0].value[0]],
+      selected: [],
+      signalSelectFilters: [],
       hoveredRegions: [],
       expanded: false
     };
   }
   render() {
-
     const selectRegions = (regions) => {
       this.setState({
         selected: this.state.selected
@@ -58,6 +58,7 @@ export default class EEGBrowser extends Component {
       <MRIViewer
         regions={leaves}
         selected={this.state.selected}
+        signalSelectFilters={this.state.signalSelectFilters}
         hoveredRegions={this.state.hoveredRegions}
         showMRI={!this.state.expanded}
       >
@@ -67,8 +68,10 @@ export default class EEGBrowser extends Component {
       <div className="eeg-browser">
         <div className="eeg-browser-row">
           <SignalSelectionFilter
+            signalSelectFilters={this.state.signalSelectFilters}
             selectedRegions={this.state.selected}
-            onRemoveRegion={region => unselectRegions([regions])}
+            onRemoveRegion={region => unselectRegions([region])}
+            setFilters={signalSelectFilters => this.setState({ signalSelectFilters })}
           >
           </SignalSelectionFilter>
         </div>
@@ -78,6 +81,7 @@ export default class EEGBrowser extends Component {
           {expandBar}
           <SignalPlots
             selected={this.state.selected}
+            signalSelectFilters={this.state.signalSelectFilters}
           >
           </SignalPlots>
         </div>

@@ -4,48 +4,34 @@ import Panel from '../../../jsx/Panel';
 export class SignalSelectionFilter extends Component {
   constructor(props) {
     super(props);
-    this.state = {
-      tags: {}
-    };
+    this.state = {};
   }
   render() {
-    const addTag = (key, value, label, optionLabel) => {
-      const { tags } = this.state;
-      const newTag = { value, label, optionLabel };
-      if (tags[key]) {
-        if (!(tags[key].find(tag => tag.value === value))) {
-          tags[key].push(newTag)
-        }
-      } else {
-        tags[key] = [newTag];
-      }
-      this.setState({ tags });
+    const addTag = (key, value, keyLabel, valueLabel) => {
+      const filter = { key, value, keyLabel, valueLabel };
+      const signalSelectFilters = this.props.signalSelectFilters
+        .filter(f => !(f.keyLabel === keyLabel && f.valueLabel === valueLabel))
+        .concat([filter]);
+      this.props.setFilters(signalSelectFilters);
     };
-    const setDropdown = (k, v) => { this.setState({ [k]: v }); };
+    const removeFilterTag = filter => {
+      const { keyLabel, valueLabel } = filter;
+      const signalSelectFilters = this.props.signalSelectFilters
+        .filter(f => !(f.keyLabel === keyLabel && f.valueLabel === valueLabel))
+      this.props.setFilters(signalSelectFilters);
+    };
     const dropdownProps = (userInputCallback, props) => {
       const onUserInput = (k, v) => userInputCallback(k, v, props.label, props.options[v]);
       return Object.assign({ onUserInput }, props);
     };
-    const removeTag = (tagKey, tag) => {
-      const { tags } = this.state;
-      if (tags[tagKey]) {
-        tags[tagKey] = tags[tagKey].filter(t => t.value !== tag.value);
-      }
-      this.setState({ tags });
-    };
-    const tagRemover = (tagKey, tag) => (
-      <span className='tag-remove-button' onClick={() => removeTag(tagKey, tag)}>x</span>
+    const filterTagRemover = (filter) => (
+      <span className='tag-remove-button' onClick={() => removeFilterTag(filter)}>x</span>
     );
-    const tagElements = [];
-    Object.keys(this.state.tags).forEach((key, i) => {
-      const tags = this.state.tags[key];
-      const tagElems = tags.map(tag => (
-        <span key={tag.optionLabel + String(i)} className="selection-filter-tag">
-          {tag.label}: {tag.optionLabel} {tagRemover(key, tag)}
-        </span>
-      ));
-      tagElements.push(...tagElems);
-    });
+    const filterTagElements = this.props.signalSelectFilters.map((filter, i) => (
+      <span key={filter.valueLabel + String(i)} className="selection-filter-tag">
+        {filter.keyLabel}: {filter.valueLabel} {filterTagRemover(filter)}
+      </span>
+    ));
     const regionTagRemover = (region) => (
       <span className='tag-remove-button' onClick={() => this.props.onRemoveRegion(region)}>
         x
@@ -78,22 +64,22 @@ export class SignalSelectionFilter extends Component {
           'G': 'Ad-Tech subdural grid/strip'
         }
       }),
-      notRepeatedContacts: dropdownProps(setDropdown, {
+      notRepeatedContacts: dropdownProps(addTag, {
         type: 'select',
-        name: 'notRepeatedContacts',
+        name: 'nonRepeated',
         value: this.state.notRepeatedContacts,
         label: 'Non-Repeated Contacts',
         options: {
-          'nonrepeated': 'Show not repeated contacts'
+          1: 'Show not repeated contacts'
         }
       }),
-      oneContactPerPatientPerRegion: dropdownProps(setDropdown, {
+      oneContactPerPatientPerRegion: dropdownProps(addTag, {
         type: 'select',
-        name: 'oneContactPerPatientPerRegion',
+        name: 'oneCPPPR',
         value: this.state.oneContactPerPatientPerRegion,
         label: 'One Contact Per Patient Per Region',
         options: {
-          'onepppr': 'Show one contact per patient per region'
+          1: 'Show one contact per patient per region'
         },
       })
     };
@@ -106,7 +92,7 @@ export class SignalSelectionFilter extends Component {
         >
         </FormElement>
         <div className="selection-filter-tags">
-          Filter Tags: {tagElements}
+          Filter Tags: {filterTagElements}
         </div>
         <div className="selection-filter-tags">
           Region Tags: {regionTagElements}

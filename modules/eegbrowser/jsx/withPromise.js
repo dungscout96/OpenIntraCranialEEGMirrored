@@ -8,21 +8,32 @@ export const withPromise = (Wrapped, transforms = {}) => {
         resolved:  false,
         value: null
       };
+      this.mounted = false;
       this.mountPromise = new Promise(resolve => { this.resolve = resolve; });
       this.mountPromise = this.mountPromise
         .then(() => props.runPromise())
         .then((value) => {
-          this.setState({ resolved: true, value });
+          if(this.mounted) {
+            this.setState({ resolved: true, value });
+          }
         });
     }
     componentWillReceiveProps(props) {
-      this.setState({ resolved: false });
+      if (this.mounted) {
+        this.setState({ resolved: false });
+      }
       props.runPromise().then((value) => {
-        this.setState({ resolved: true, value });
+        if (this.mounted) {
+          this.setState({ resolved: true, value });
+        }
       });
     }
     componentDidMount() {
+      this.mounted = true;
       this.resolve();
+    }
+    componentWillUnmount() {
+      this.mounted = false;
     }
     render() {
       const { resolved, value } = this.state;
