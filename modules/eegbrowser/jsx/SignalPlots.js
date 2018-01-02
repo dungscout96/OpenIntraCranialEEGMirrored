@@ -12,7 +12,7 @@ const PLOTS_PER_GROUP = 7;
 const PLOT_HEIGHT = 90;
 const Y_BOUNDS = { ymin: -250, ymax: 250 };
 const Y_WIDTH = 60;
-
+const ZIP_URL = `${loris.BaseURL}/${loris.TestName}/ajax/GetChannelZip.php`;
 
 const PromisedSignalPlot = withPromise(SignalPlot);
 
@@ -186,6 +186,34 @@ export class SignalPlots extends Component {
         Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numChannels}
       </div>
     );
+    const getZipped = () => {
+      const formdata = new FormData();
+      const names = filterChannels(this.props.signalSelectFilters, this.props.selected)
+        .map(c => c.metaData.name);
+      formdata.set('channelnames', names.join(','));
+      fetch(ZIP_URL, { credentials: 'include', method: 'POST', body: formdata })
+        .then(res => {
+          if (res.status !== 200) {
+            alert(`POST Failed with status ${res.status}`);
+            throw new Error(`POST Failed with status ${res.status}`);
+          }
+          return fetch(ZIP_URL, { credentials: 'include' })
+        })
+        .then(res => {
+          if (res.status !== 200) {
+            alert(`GET Failed with status ${res.status}`);
+            throw new Error(`GET Failed with status ${res.status}`);
+          }
+          return res.blob();
+        })
+        .then(buffer => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(buffer);
+          a.download = 'ieegSignals.zip';
+          a.click()
+          URL.revokeObjectURL(a.href);
+        });
+    };
     return (
       <div className="signal-plots-container">
         <div className="toolbar">
@@ -194,6 +222,17 @@ export class SignalPlots extends Component {
               {showPrev ? enabled('Previous', -1) : disabled('Previous')}
               {showNext ? enabled('Next', +1) : disabled('Next')}
               {numChannels > 0 ? showingPlots : null}
+            </div>
+          </div>
+          <div className="toolbar-layer">
+            <div
+              className="round-button"
+              onClick={getZipped}
+            >
+              Zip all signals
+            </div>
+            <div className="round-button">
+              <a href={`${loris.BaseURL}/document_repository`}>See Files by Region</a>
             </div>
           </div>
           <div className="toolbar-layer">

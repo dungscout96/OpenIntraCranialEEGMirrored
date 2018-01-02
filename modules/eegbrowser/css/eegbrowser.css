@@ -159,6 +159,10 @@
   user-select: none;
 }
 
+.round-button a {
+  color: #fff;
+}
+
 .round-button.disabled {
   background-color: #aaaaaa;
   cursor: not-allowed;

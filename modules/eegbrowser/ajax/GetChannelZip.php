@@ -33,12 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("HTTP/1.1 400 Bad Request");
         exit(5);
     }
-    $channelNames = explode("=", $_POST['channelnames'])[1];
-    $channelNames = explode(",", $channelNames);
-
+    $channelNames = explode(",", $_POST['channelnames']);
     function makePath($channelName) {
         global $dataPath;
-        return $dataPath . basename($channelName) . '.edf';
+        return basename($channelName) . '.edf';
     }
 
     $paths = array_map(makePath, $channelNames);
@@ -53,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if (empty($paths)) {
         error_log("WARNING: \$paths is empty.");
         header("HTTP/1.1 204 No Content");
-        exit;
+        exit(1);
     }
     $_SESSION['paths'] = [];
     $zipargs = implode(" ", $paths);
@@ -63,8 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $i++;
         $countedZipPath = $zipPath . $i;
     }
-    $countedZipPath = escapeshellarg($countedZipPath . '.zip');
+    $countedZipPath = $countedZipPath . '.zip';
+    $cwd = getcwd();
+    chdir($dataPath);
     shell_exec("zip " . $countedZipPath . " " . $zipargs);
+    chdir($cwd);
     if (!file_exists($countedZipPath)) {
         error_log("ERROR: File $countedZipPath does not exist");
         header("HTTP/1.1 404 Not Found");
