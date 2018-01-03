@@ -4,6 +4,7 @@ import { RegionSelect,  } from './RegionSelect';
 import { MRIViewer } from './MRIViewer';
 import { SignalSelectionFilter } from './SignalSelectionFilter';
 import { SignalPlots } from './SignalPlots';
+import { fetch } from './fetch';
 
 import { getLeafRegions, instantiateRegions } from './EEGData';
 

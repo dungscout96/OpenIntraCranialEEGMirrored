@@ -3,6 +3,7 @@ import { withPromise } from './withPromise';
 import { SignalPlot } from './SignalPlot';
 import { SignalProcessingSelect } from './SignalProcessingSelect';
 import { filterChannels } from './EEGData';
+import { fetch } from './fetch';
 
 import { LOW_PASS_FILTERS, HIGH_PASS_FILTERS } from './Filters';
 
@@ -187,25 +188,17 @@ export class SignalPlots extends Component {
       </div>
     );
     const getZipped = () => {
-      const formdata = new FormData();
       const names = filterChannels(this.props.signalSelectFilters, this.props.selected)
         .map(c => c.metaData.name);
+      if (names.length === 0) {
+        return;
+      }
+      const formdata = new FormData();
       formdata.set('channelnames', names.join(','));
+      alert("Click OK and please wait");
       fetch(ZIP_URL, { credentials: 'include', method: 'POST', body: formdata })
-        .then(res => {
-          if (res.status !== 200) {
-            alert(`POST Failed with status ${res.status}`);
-            throw new Error(`POST Failed with status ${res.status}`);
-          }
-          return fetch(ZIP_URL, { credentials: 'include' })
-        })
-        .then(res => {
-          if (res.status !== 200) {
-            alert(`GET Failed with status ${res.status}`);
-            throw new Error(`GET Failed with status ${res.status}`);
-          }
-          return res.blob();
-        })
+        .then(() => fetch(ZIP_URL, { credentials: 'include' }))
+        .then(res => res.blob())
         .then(buffer => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(buffer);
@@ -229,7 +222,7 @@ export class SignalPlots extends Component {
               className="round-button"
               onClick={getZipped}
             >
-              Zip all signals
+              Zip Selected Raw Signals
             </div>
             <div className="round-button">
               <a href={`${loris.BaseURL}/document_repository`}>See Files by Region</a>

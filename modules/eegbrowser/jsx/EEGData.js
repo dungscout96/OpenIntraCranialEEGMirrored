@@ -1,4 +1,5 @@
 import { FILTERS } from './Filters';
+import { fetch } from './fetch';
 
 const NUM_REGIONS = 8;
 const POINTS_PER_REGION = 5;
@@ -19,12 +20,7 @@ export class Channel {
       return this.promise;
     }
     this.promise = fetch(`${loris.BaseURL}/${loris.TestName}/ajax/GetChannel.php?channelname=${this.metaData.name}`, { credentials: 'include' })
-      .then(res => {
-        if (res.status !== 200) {
-          throw new Error(`Failed withs status ${res.status}`);
-        }
-        return res.blob();
-      })
+      .then(res => res.blob())
       .then(blob => {
         const reader = new FileReader();
         reader.readAsArrayBuffer(blob);
