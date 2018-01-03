@@ -24,7 +24,7 @@ if (!$rootDataPath) {
     exit(1);
 }
 
-$dataPath = $rootDataPath . "data/";
+$dataPath = $rootDataPath;
 $zipPath = "/tmp/ieegBundle";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $channelNames = explode(",", $_POST['channelnames']);
     function makePath($channelName) {
         global $dataPath;
-        return basename($channelName) . '.edf';
+        return 'data/' . basename($channelName) . '.edf';
     }
 
     $paths = array_map(makePath, $channelNames);

@@ -70,7 +70,7 @@ export class SignalSelectionFilter extends Component {
         value: this.state.notRepeatedContacts,
         label: 'Non-Repeated Contacts',
         options: {
-          1: 'Show not repeated contacts'
+          true: 'Show not repeated contacts'
         }
       }),
       oneContactPerPatientPerRegion: dropdownProps(addTag, {
@@ -79,7 +79,7 @@ export class SignalSelectionFilter extends Component {
         value: this.state.oneContactPerPatientPerRegion,
         label: 'One Contact Per Patient Per Region',
         options: {
-          1: 'Show one contact per patient per region'
+          true: 'Show one contact per patient per region'
         },
       })
     };

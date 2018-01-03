@@ -240,6 +240,11 @@ export class SignalPlots extends Component {
               <SignalProcessingSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
             </div>
           </div>
+          <div className="toolbar-layer">
+            <div style={{ marginLeft: '15px' }}>
+              <h4>Hold Shift and zoom with scroll or translate with mouse drag.</h4>
+            </div>
+          </div>
         </div>
         <div
           className="signal-plots"

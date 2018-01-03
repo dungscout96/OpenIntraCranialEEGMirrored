@@ -145,6 +145,9 @@ export class MRIViewer extends Component {
           <div ref={(div) => { this.container = div; }}>
           </div>
           <div className="mri-controls">
+              <h4>Hold R to rotate or T to translate the planes.</h4>
+          </div>
+          <div className="mri-controls">
             <div>Position:</div>
             <NumericElement name="x" label="x" value={`${this.state.position.x}`} min={-Infinity} max={Infinity} onUserInput={(_, v) => changePos({x: v})}/>
             <NumericElement name="y" label="y" value={`${this.state.position.y}`} min={-Infinity} max={Infinity} onUserInput={(_, v) => changePos({y: v})}/>

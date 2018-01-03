@@ -79,7 +79,11 @@ export class Channel {
     if (filters.length === 0) {
       return true;
     }
-    return filters.some(filter => this.metaData[filter.key] === filter.value);
+    const matches = {};
+    filters.forEach(filter => {
+      matches[filter.key] = matches[filter.key] || String(this.metaData[filter.key]) === filter.value
+    });
+    return Object.keys(matches).every(key => matches[key]);
   }
 }
 
