@@ -370,6 +370,7 @@ export class SignalPlot extends Component {
           href={`${loris.BaseURL}/${loris.TestName}/GetChannel.php?channelname=${this.props.channel.metaData.name}`}
           ref={(link) => { this.link = link; }}
           onMouseDown={(e) => { e.stopPropagation(); } }
+          download
         >
           {this.props.channel.metaData.name}
         </a>
