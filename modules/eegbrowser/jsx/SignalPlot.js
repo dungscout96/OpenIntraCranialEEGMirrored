@@ -309,7 +309,7 @@ export class SignalPlot extends Component {
     const regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode);
     const self = this;
     const channelName = g.append('text')
-                         .attr('x', 105)
+                         .attr('x', 135)
                          .attr('y', height - 6)
                          .attr('font-size', 13);
     this.drawLink(svg);
@@ -370,7 +370,7 @@ export class SignalPlot extends Component {
           href={`${loris.BaseURL}/${loris.TestName}/GetChannel.php?channelname=${this.props.channel.metaData.name}`}
           ref={(link) => { this.link = link; }}
           onMouseDown={(e) => { e.stopPropagation(); } }
-          download
+          download={`${this.props.channel.metaData.name}.edf`}
         >
           {this.props.channel.metaData.name}
         </a>

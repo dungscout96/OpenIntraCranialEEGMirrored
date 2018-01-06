@@ -3,7 +3,7 @@ import MRILoader from './MRILoader';
 
 const MESH_SIZE = 1/80;
 
-const GREEN = 0x34A853;
+const WHITE = 0xFFFFFF;
 const GRAY = 0x333333;
 const BLUE = 0x4285F4;
 export class MRIViewer extends Component {
@@ -98,7 +98,7 @@ export class MRIViewer extends Component {
         if (this.meshes[i]) {
           this.meshes[i].forEach(m => { m.material.color.setHex(GRAY); });
           if (this.props.selected.find(r => r === region)) {
-            this.meshes[i].forEach(m => { m.material.color.setHex(GREEN); });
+            this.meshes[i].forEach(m => { m.material.color.setHex(WHITE); });
           }
           if (this.props.hoveredRegions.includes(region)) {
             this.meshes[i].forEach(m => { m.material.color.setHex(BLUE); });

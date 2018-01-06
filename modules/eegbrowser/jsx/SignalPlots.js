@@ -137,10 +137,17 @@ export class SignalPlots extends Component {
       const dx = x - this.lastMouseX;
       this.lastMouseX = x;
       if (shift && leftClick) {
+        let cappedDx = dx;
+        if (tmin <= -10) {
+          cappedDx = Math.min(dx, 0);
+        }
+        if (tmax >= 70) {
+          cappedDx = Math.max(dx, 0);
+        }
         this.setState({
           tBounds: {
-            tmin: tmin - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width,
-            tmax: tmax - dx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width
+            tmin: tmin - cappedDx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width,
+            tmax: tmax - cappedDx * INTERVAL_MOVE_AMOUNT * (tmax - tmin) / width
           }
         });
       }
@@ -211,13 +218,7 @@ export class SignalPlots extends Component {
       <div className="signal-plots-container">
         <div className="toolbar">
           <div className="toolbar-layer toolbar-layer--left">
-            <div className="toolbar-ver-group">
-              <div
-                className="round-button"
-                onClick={getZipped}
-              >
-                Download Selected Raw Signals
-              </div>
+            <div className="toolbar-ver-group" style={{ maxWidth: '260px' }}>
               <div className="round-button">
                 <a
                   href={`${loris.BaseURL}/document_repository`}
@@ -225,6 +226,12 @@ export class SignalPlots extends Component {
                 >
                   Download Region Files
                 </a>
+              </div>
+              <div
+                className="round-button"
+                onClick={getZipped}
+              >
+                Download Selected Raw Signals
               </div>
             </div>
           </div>
