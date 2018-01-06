@@ -43,16 +43,6 @@ export class SignalSelectionFilter extends Component {
       </span>
     ));
     const formElements = {
-      center: dropdownProps(addTag, {
-        type: 'select',
-        name: 'center',
-        label: 'Center',
-        options: {
-          'M': 'MNI',
-          'N': 'CHUM',
-          'G': 'CHUGA'
-        },
-      }),
       electrodeType: dropdownProps(addTag, {
         type: 'select',
         name: 'electrodeType',
@@ -87,7 +77,7 @@ export class SignalSelectionFilter extends Component {
       <Panel title="Channel Selection Filters">
         <FormElement
           name="selectionFilters"
-          columns={2}
+          columns={1}
           formElements={formElements}
         >
         </FormElement>

@@ -48,7 +48,6 @@ class LeafNode {
 
 class Channel {
     public $name = "";
-    public $center = "";
     public $electrodeType = "";
     public $regionID = "";
     public $regionName = "";

@@ -57,9 +57,9 @@ export class RegionSelect extends Component {
     };
     const renderInnerNode = (node) => {
         const regions = getLeafRegions(node);
+        const contained = regions.map(r => this.props.selected.includes(r)).reduce((a, b) => a && (!!b), true);
         const onAllClick = (event) => {
           event.stopPropagation();
-          const contained = regions.map(r => this.props.selected.includes(r)).reduce((a, b) => a && (!!b), true);
           if (contained) {
             this.props.unselectRegions(regions);
           } else {
@@ -68,10 +68,10 @@ export class RegionSelect extends Component {
         };
         const allButton = (
           <div
-            className="round-button" style={{display: 'inline'}}
+            className="round-button" style={{display: 'inline-block'}}
             onClick={onAllClick}
           >
-            All
+            {contained ? 'deselect all' : 'select all'}
           </div>
         );
         return (

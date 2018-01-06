@@ -210,22 +210,29 @@ export class SignalPlots extends Component {
     return (
       <div className="signal-plots-container">
         <div className="toolbar">
-          <div className="toolbar-layer">
-            <div className="toolbar-buttons">
-              {showPrev ? enabled('Previous', -1) : disabled('Previous')}
-              {showNext ? enabled('Next', +1) : disabled('Next')}
-              {numChannels > 0 ? showingPlots : null}
+          <div className="toolbar-layer toolbar-layer--left">
+            <div className="toolbar-ver-group">
+              <div
+                className="round-button"
+                onClick={getZipped}
+              >
+                Download Selected Raw Signals
+              </div>
+              <div className="round-button">
+                <a
+                  href={`${loris.BaseURL}/document_repository`}
+                  onClick = {(e) => confirm('Would you like to leave this page?') || e.preventDefault() }
+                >
+                  Download Region Files
+                </a>
+              </div>
             </div>
           </div>
           <div className="toolbar-layer">
-            <div
-              className="round-button"
-              onClick={getZipped}
-            >
-              Zip Selected Raw Signals
-            </div>
-            <div className="round-button">
-              <a href={`${loris.BaseURL}/document_repository`}>See Files by Region</a>
+            <div className="toolbar-hor-group">
+              {showPrev ? enabled('Previous', -1) : disabled('Previous')}
+              {showNext ? enabled('Next', +1) : disabled('Next')}
+              {numChannels > 0 ? showingPlots : null}
             </div>
           </div>
           <div className="toolbar-layer">
