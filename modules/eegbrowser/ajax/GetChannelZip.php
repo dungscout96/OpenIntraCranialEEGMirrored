@@ -17,6 +17,17 @@ if (!isset($_SESSION['paths'])) {
     $_SESSION['paths'] = [];
 }
 
+function command_exist($cmd) {
+    $return = shell_exec(sprintf("which %s", escapeshellarg($cmd)));
+    return !empty($return);
+}
+
+if (!command_exist('zip')) {
+    error_log("ERROR: zip needs to be installed on this system.");
+    header("HTTP/1.1 500 Internal Server Error.");
+    exit(5);
+}
+
 require_once "rootPath.php";
 if (!$rootDataPath) {
     error_log("ERROR: $rootDataPath does not exist");
@@ -71,10 +82,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         header("HTTP/1.1 404 Not Found");
         exit(5);
     }
+    header('Content-Disposition: attachment; filename="'.$zipname.'"');
     header('Content-Description: File Transfer');
     header('Content-Type: application/force-download');
     header("Content-Transfer-Encoding: Binary");
-    header("Content-disposition: attachment; filename=\"" . basename($zipPath) . "\"");
+    header("Content-disposition: attachment; filename=\"" . basename($countedZipPath) . "\"");
+    ob_clean();
+    flush();
     readfile($countedZipPath);
     shell_exec("rm -f $countedZipPath"); // slightly insecure but easy.
     error_log("rm -f $countedZipPath");
