@@ -1,7 +1,8 @@
 import React, { Component } from 'react';
 
 /* eslint-disable no-undef */
-
+const CURSOR_FONT_SIZE = 10;
+const STATS_TOP_OFFSET = 27;
 const drawSignalLine = (ctx, tScale, yScale, channel, indexes) => {
   const startx = tScale(channel.domain[indexes[0]]);
   const starty = yScale(channel.signal[indexes[0]]);
@@ -210,16 +211,24 @@ export class SignalPlot extends Component {
     const { width, height } = this.getDimensions();
     const { div, svg, g } = this.plot;
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    this.plot.channelName.text(` | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     this.drawLink(svg, false)
     if (this.plot.cursorTick) {
       this.plot.cursorTick.remove();
       this.plot.cursorTick = null;
     }
+    if (this.plot.cursorStats) {
+      this.plot.cursorStats.remove();
+      this.plot.cursorStats = null;
+    }
     if (this.props.cursorT) {
       const cursorPos = t(this.props.cursorT);
       if (0 <= cursorPos && cursorPos <= width) {
         this.plot.cursorTick = drawCursorTick(g, height, cursorPos);
+        this.plot.cursorStats = g.append('text')
+          .attr('x', cursorPos)
+          .attr('y', STATS_TOP_OFFSET)
+          .attr('font-size', CURSOR_FONT_SIZE)
+          .text(`${this.props.xAxisLabel}: ${cursTime}\nvalue (${this.props.yAxisLabel}): ${cursVal}`);
       }
     }
     if (this.plot.xAx) {
@@ -301,20 +310,21 @@ export class SignalPlot extends Component {
     const yAx = g.append('g')
                  .call(yAxis);
     const regionColorCode = drawRegionColorCode(svg, height, this.props.colorCode);
-    const channelName = g.append('text')
-                         .attr('x', 135)
-                         .attr('y', height - 6)
-                         .attr('font-size', 13);
     this.drawLink(svg);
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    channelName.text(` | ${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
     drawSignalLine(ctx, t, y, channel, indexes);
     drawSecondTicks(ctx, height, t, tmin, tmax);
     let cursorTick = null;
+    let cursorStats = null;
     if (this.props.cursorT) {
       const cursorPos = t(this.props.cursorT);
       if (0 >= cursorPos && cursorPos <= width) {
         cursorTick = drawCursorTick(g, height, cursorPos);
+        cursorStats = g.append('text')
+         .attr('x', cursorPos)
+         .attr('y', STATS_TOP_OFFSET)
+         .attr('font-size', CURSOR_FONT_SIZE)
+         .text(`${this.props.xAxisLabel}: ${cursTime}\nvalue (${this.props.yAxisLabel}): ${cursVal}`);
       }
     }
     let xAx = null;
@@ -342,7 +352,7 @@ export class SignalPlot extends Component {
       height,
       regionColorCode,
       channel,
-      channelName,
+      cursorStats,
       canvas,
       ctx,
       cursorTick,

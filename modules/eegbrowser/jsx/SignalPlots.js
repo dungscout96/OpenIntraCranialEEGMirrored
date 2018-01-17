@@ -191,6 +191,11 @@ export class SignalPlots extends Component {
         Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numChannels}
       </div>
     );
+    const noPlotsScreen = (
+      <div className="no-plots-screen">
+        <h4>Select a region or lobe to display signals.</h4>
+      </div>
+    );
     return (
       <div className="signal-plots-container">
         <div className="toolbar">
@@ -226,7 +231,7 @@ export class SignalPlots extends Component {
           onMouseMove={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}
           onMouseDown={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}
         >
-          {plotElements}
+          {plotElements.length === 0 ? noPlotsScreen : plotElements}
         </div>
       </div>
     );

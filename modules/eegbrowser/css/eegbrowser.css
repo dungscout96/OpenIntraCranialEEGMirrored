@@ -18,6 +18,12 @@
   flex-direction: row;
 }
 
+.no-plots-screen {
+  text-align: center;
+  border-style: solid;
+  border-color: #4A4A4A;
+}
+
 .region-select {
   flex: 1.5;
 }
