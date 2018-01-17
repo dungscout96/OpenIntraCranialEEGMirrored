@@ -1,12 +1,18 @@
 import React, { Component } from 'react';
 import Panel from '../../../jsx/Panel';
+import { filterChannels } from './EEGData';
+
+/* eslint-disable react/jsx-no-undef */
+
+const ZIP_URL = `${window.loris.BaseURL}/${window.loris.TestName}/ajax/GetChannelZip.php`;
 
 export class SignalSelectionFilter extends Component {
   constructor(props) {
     super(props);
-    this.state = {};
+    this.state = { showFilters: false };
   }
   render() {
+    // BEGIN TO REMOVE
     const addTag = (key, value, keyLabel, valueLabel) => {
       const filter = { key, value, keyLabel, valueLabel };
       const signalSelectFilters = this.props.signalSelectFilters
@@ -32,6 +38,7 @@ export class SignalSelectionFilter extends Component {
         {filter.keyLabel}: {filter.valueLabel} {filterTagRemover(filter)}
       </span>
     ));
+    // END TO REMOVE
     const regionTagRemover = (region) => (
       <span className='tag-remove-button' onClick={() => this.props.onRemoveRegion(region)}>
         x
@@ -42,6 +49,33 @@ export class SignalSelectionFilter extends Component {
         {region.name} {regionTagRemover(region)}
       </span>
     ));
+    const filterContainer = (
+      <div className="selection-filter-tags">
+        Region Tags: {regionTagElements}
+      </div>
+    );
+    const getZipped = () => {
+      const names = filterChannels(this.props.signalSelectFilters, this.props.selectedRegions)
+        .map(c => c.metaData.name);
+      if (names.length === 0) {
+        return;
+      }
+      if (!window.confirm("Click OK and please wait")) {
+        return;
+      }
+      const formdata = new FormData();
+      formdata.set('channelnames', names.join(','));
+      fetch(ZIP_URL, { credentials: 'include', method: 'POST', body: formdata })
+        .then(() => fetch(ZIP_URL, { credentials: 'include' }))
+        .then(res => res.blob())
+        .then(buffer => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(buffer);
+          a.download = 'ieegSignals.zip';
+          a.click()
+          URL.revokeObjectURL(a.href);
+        });
+    };
     const formElements = {
       electrodeType: dropdownProps(addTag, {
         type: 'select',
@@ -54,20 +88,11 @@ export class SignalSelectionFilter extends Component {
           'G': 'Ad-Tech subdural grid/strip'
         }
       }),
-      notRepeatedContacts: dropdownProps(addTag, {
-        type: 'select',
-        name: 'nonRepeated',
-        value: this.state.notRepeatedContacts,
-        label: 'Non-Repeated Contacts',
-        options: {
-          true: 'Show not repeated contacts'
-        }
-      }),
       oneContactPerPatientPerRegion: dropdownProps(addTag, {
         type: 'select',
         name: 'oneCPPPR',
         value: this.state.oneContactPerPatientPerRegion,
-        label: 'One Contact Per Patient Per Region',
+        label: 'Show only one channel per patient',
         options: {
           true: 'Show one contact per patient per region'
         },
@@ -81,12 +106,32 @@ export class SignalSelectionFilter extends Component {
           formElements={formElements}
         >
         </FormElement>
-        <div className="selection-filter-tags">
-          Filter Tags: {filterTagElements}
+        <hr />
+        <div style={{ display: 'inline-block', width: '240px' }} className="round-button">
+          <a
+            href={`${window.loris.BaseURL}/document_repository`}
+            target="_blank"
+          >
+            Download Region Files
+          </a>
         </div>
-        <div className="selection-filter-tags">
-          Region Tags: {regionTagElements}
+        <div
+          style={{ display: 'inline-block', width: '240px' }}
+          className={`round-button${this.props.selectedRegions.length === 0 ? ' disabled' : ''}`}
+          onClick={getZipped}
+
+        >
+          Download Selected Raw Signals
         </div>
+        <hr />
+        <div
+          style={{ width: '160px' }}
+          className="round-button"
+          onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
+        >
+          {this.state.showFilters ? 'Hide' : 'Show'} selection filters
+        </div>
+        {this.state.showFilters && filterContainer}
       </Panel>
     );
   }

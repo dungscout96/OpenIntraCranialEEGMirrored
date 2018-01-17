@@ -18,7 +18,7 @@ export default class EEGBrowser extends Component {
       selected: [],
       signalSelectFilters: [],
       hoveredRegions: [],
-      expanded: false
+      expanded: 1
     };
   }
   render() {
@@ -35,12 +35,20 @@ export default class EEGBrowser extends Component {
           .filter(r => !regions.includes(r))
       });
     };
-    const expandBar = (
+    const expandBarLeft = (
       <div
         className="expand-bar"
-        onClick={() => this.setState({ expanded: !this.state.expanded })}
+        onClick={() => this.setState({ expanded: Math.max(this.state.expanded - 1, 0) })}
       >
-        <span className="expand-bar-icon">{this.state.expanded ? '>' : '<'}</span>
+        <span className="expand-bar-icon">{'<'}</span>
+      </div>
+    );
+    const expandBarRight = (
+      <div
+        className="expand-bar"
+        onClick={() => this.setState({ expanded: Math.min(this.state.expanded + 1, 2) })}
+      >
+        <span className="expand-bar-icon">{'>'}</span>
       </div>
     );
     const regionSelect = (
@@ -61,7 +69,7 @@ export default class EEGBrowser extends Component {
         selected={this.state.selected}
         signalSelectFilters={this.state.signalSelectFilters}
         hoveredRegions={this.state.hoveredRegions}
-        showMRI={!this.state.expanded}
+        showMRI={this.state.expanded >= 2}
       >
       </MRIViewer>
     );
@@ -77,9 +85,12 @@ export default class EEGBrowser extends Component {
           </SignalSelectionFilter>
         </div>
         <div className="eeg-browser-row">
-          {this.state.expanded ? null : regionSelect}
+          {this.state.expanded > 0 ? regionSelect : null}
           {mriView}
-          {expandBar}
+          <div className="expand-bars">
+            {expandBarLeft}
+            {expandBarRight}
+          </div>
           <SignalPlots
             selected={this.state.selected}
             signalSelectFilters={this.state.signalSelectFilters}
@@ -104,7 +115,7 @@ const PromisedEEGBrowser = withPromise(EEGBrowser, {
 class App extends Component {
   constructor(props) {
     super(props);
-    this.fetch = fetch(`${loris.BaseURL}/${loris.TestName}/ajax/GetMeta.php`, {
+    this.fetch = fetch(`${window.loris.BaseURL}/${window.loris.TestName}/ajax/GetMeta.php`, {
       method: 'GET',
       credentials: 'include'
     })

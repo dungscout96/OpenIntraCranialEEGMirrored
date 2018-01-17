@@ -1,8 +1,10 @@
 import ShaderManager from './shader/ShaderManager';
 import MRIOverlay from './shader/MRIOverlay';
 
-const MODEL_URL = `${loris.BaseURL}/${loris.TestName}/static/model_mni.nii.gz`;
-const LABEL_URL = `${loris.BaseURL}/${loris.TestName}/static/labels_mni.nii.gz`;
+/* eslint-disable no-undef */
+
+const MODEL_URL = `${window.loris.BaseURL}/${window.loris.TestName}/static/model_mni.nii.gz`;
+const LABEL_URL = `${window.loris.BaseURL}/${window.loris.TestName}/static/labels_mni.nii.gz`;
 
 export default class MRILoader {
   constructor(scene) {

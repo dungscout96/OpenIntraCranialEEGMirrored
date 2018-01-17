@@ -4,7 +4,7 @@ export const fetch = (...args) => {
   return window.fetch(...args).then(res => {
     switch(res.status) {
       case 401:
-        window.localion.assign(loris.BaseURL);
+        window.location.assign(window.loris.BaseURL);
         return;
       case 404:
         if (fourohfoured) {
@@ -20,7 +20,8 @@ export const fetch = (...args) => {
         alert('The client is sending incorectly formatted file requests.')
         twoohfoured = true;
         return
+      default:
+        return res;
     }
-    return res;
   });
 }

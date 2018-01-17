@@ -1,21 +1,19 @@
 import React, { Component } from 'react';
-import { withPromise } from './withPromise';
 import { SignalPlot } from './SignalPlot';
 import { SignalProcessingSelect } from './SignalProcessingSelect';
-import { filterChannels } from './EEGData';
 import { fetch } from './fetch';
+import { filterChannels } from './EEGData';
+
+/* eslint-disable no-undef, react/jsx-no-undef */
 
 import { LOW_PASS_FILTERS, HIGH_PASS_FILTERS } from './Filters';
 
 const ZOOM_AMOUNT = 1;
 const INTERVAL_MOVE_AMOUNT = 1;
-const PLOTS_PER_GROUP = 7;
+const PLOTS_PER_GROUP = 8;
 const PLOT_HEIGHT = 90;
 const Y_BOUNDS = { ymin: -250, ymax: 250 };
 const Y_WIDTH = 60;
-const ZIP_URL = `${loris.BaseURL}/${loris.TestName}/ajax/GetChannelZip.php`;
-
-const PromisedSignalPlot = withPromise(SignalPlot);
 
 export class SignalPlots extends Component {
   constructor(props) {
@@ -81,9 +79,8 @@ export class SignalPlots extends Component {
         };
         const { ymin, ymax } = this.state.yBounds[channel.metaData.name] || Y_BOUNDS;
         plotElements.push(
-          <PromisedSignalPlot
-            runPromise={() => channel.fetch()}
-            key={index}
+          <SignalPlot
+            key={`${channel.metaData.name}-${index}`}
             className='signal-plot-item'
             channel={channel}
             colorCode={channel.colorCode}
@@ -194,47 +191,9 @@ export class SignalPlots extends Component {
         Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numChannels}
       </div>
     );
-    const getZipped = () => {
-      const names = filterChannels(this.props.signalSelectFilters, this.props.selected)
-        .map(c => c.metaData.name);
-      if (names.length === 0) {
-        return;
-      }
-      const formdata = new FormData();
-      formdata.set('channelnames', names.join(','));
-      alert("Click OK and please wait");
-      fetch(ZIP_URL, { credentials: 'include', method: 'POST', body: formdata })
-        .then(() => fetch(ZIP_URL, { credentials: 'include' }))
-        .then(res => res.blob())
-        .then(buffer => {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(buffer);
-          a.download = 'ieegSignals.zip';
-          a.click()
-          URL.revokeObjectURL(a.href);
-        });
-    };
     return (
       <div className="signal-plots-container">
         <div className="toolbar">
-          <div className="toolbar-layer toolbar-layer--left">
-            <div className="toolbar-ver-group" style={{ maxWidth: '260px' }}>
-              <div className="round-button">
-                <a
-                  href={`${loris.BaseURL}/document_repository`}
-                  onClick = {(e) => confirm('Would you like to leave this page?') || e.preventDefault() }
-                >
-                  Download Region Files
-                </a>
-              </div>
-              <div
-                className="round-button"
-                onClick={getZipped}
-              >
-                Download Selected Raw Signals
-              </div>
-            </div>
-          </div>
           <div className="toolbar-layer">
             <div className="toolbar-hor-group">
               {showPrev ? enabled('Previous', -1) : disabled('Previous')}
@@ -250,13 +209,13 @@ export class SignalPlots extends Component {
               Reset Y Zoom
             </div>
             <div className="signal-plots-filters">
-              <SignalProcessingSelect filters={LOW_PASS_FILTERS} filter={this.state.filters.low} onChange={selectLow} />
               <SignalProcessingSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
+              <SignalProcessingSelect filters={LOW_PASS_FILTERS} filter={this.state.filters.low} onChange={selectLow} />
             </div>
           </div>
           <div className="toolbar-layer">
             <div style={{ marginLeft: '15px' }}>
-              <h4>Hold Shift and zoom with scroll or translate with mouse drag.</h4>
+              <h4>Change time scale with Shift + mouse scroll</h4>
             </div>
           </div>
         </div>

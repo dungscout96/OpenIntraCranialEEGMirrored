@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
 import MRILoader from './MRILoader';
 
+/* eslint-disable no-undef, react/jsx-no-undef */
+
 const MESH_SIZE = 1/80;
 
 const WHITE = 0xFFFFFF;
@@ -10,92 +12,111 @@ export class MRIViewer extends Component {
   constructor(props) {
     super(props)
     this.state = {
+      showElectrodes: false,
       position: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 }
     }
   }
-  componentDidMount() {
-    const width = 400;
-    const height = 350;
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0, 1.0));
-    const self = this;
-    self.mouse = new THREE.Vector2();
-    function run() {
-      renderer.render(self.scene, self.camera);
-      window.requestAnimationFrame(run);
-    }
-    this.canvas = renderer.domElement;
-    this.canvas.addEventListener('mousemove', (event) => {
-      const { top, left, width, height } = self.canvas.getBoundingClientRect();
-      const x = event.clientX - left;
-      const y = height - (event.clientY - top);
-      self.mouse.set(
-        2 * x / width - 1,
-        2 * y / height - 1
-      );
-    });
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.addCanvas()
-    renderer.setSize(width, height);
-    this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 100000);
-    this.camControls = new THREE.OrbitControls(this.camera, this.canvas);
-    this.camControls.enableKeys = false;
-    this.scene = new THREE.Scene();
-    this.mriLoader = new MRILoader(this.scene);
-    this.meshes = [];
-    this.mriLoader.initialize().then(() => {
-      this.planeShifter = new PlaneShifter.PlaneShifter(
-        this.mriLoader.system,
-        this.camera,
-        { controls: this.camControls, mouse:this.mouse }
-      );
-      this.planeShifter.setBoundingBox(this.mriLoader.getShaderManager().getBoundingBox());
-      const round = x => Math.floor(x * 100) / 100;
-      this.planeShifter.on('translation', () => {
-        let { x, y, z } = this.mriLoader.system.position;
-        x = round(x);
-        y = round(y);
-        z = round(z);
-        this.setState({ position: { x, y, z } });
+  componentWillReceiveProps(newProps) {
+    if (!this.initialized && !this.props.showMRI && newProps.showMRI) {
+      this.initialized = true;
+      const width = 400;
+      const height = 350;
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0, 1.0));
+      const self = this;
+      self.mouse = new THREE.Vector2();
+      function run() {
+        renderer.render(self.scene, self.camera);
+        window.requestAnimationFrame(run);
+      }
+      this.canvas = renderer.domElement;
+      this.canvas.addEventListener('mousemove', (event) => {
+        const { top, left, width, height } = self.canvas.getBoundingClientRect();
+        const x = event.clientX - left;
+        const y = height - (event.clientY - top);
+        self.mouse.set(
+          2 * x / width - 1,
+          2 * y / height - 1
+        );
       });
-      this.planeShifter.on('rotation', () => {
-        let { x, y, z } = this.mriLoader.system.rotation;
-        const toDeg = rad => (rad / Math.PI) * 180;
-        x = round(toDeg(x));
-        y = round(toDeg(y));
-        z = round(toDeg(z));
-        this.setState({ rotation: { x, y, z } });
-      });
-      const dimensions = this.mriLoader.getShaderManager().getDimensions();
-      const { x, y, z } = dimensions;
-      const scale = Math.min(x, y, z) / 2;
-      const diagonal = dimensions.length();
-      this.camera.position.z = diagonal;
-      this.camera.lookAt(new THREE.Vector3(0, 0, 0));
-      const material = new THREE.MeshBasicMaterial({ color: GRAY });
-      const geometry = new THREE.SphereBufferGeometry(MESH_SIZE * scale, 8, 8);
-      this.props.regions.forEach((region, i) => {
-        region.channels.forEach((channel) => {
-          const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
-          mesh.material.copy(material)
-          mesh.position.fromArray(channel.metaData.position);
-          this.scene.add(mesh);
-          if (!this.meshes[i]) {
-            this.meshes[i] = [];
-          }
-          this.meshes[i].push(mesh);
+      this.canvas.width = width;
+      this.canvas.height = height;
+      this.addCanvas()
+      renderer.setSize(width, height);
+      this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 100000);
+      this.camControls = new THREE.OrbitControls(this.camera, this.canvas);
+      this.camControls.enableKeys = false;
+      this.scene = new THREE.Scene();
+      this.mriLoader = new MRILoader(this.scene);
+      this.meshes = [];
+      this.mriLoader.initialize().then(() => {
+        this.planeShifter = new PlaneShifter.PlaneShifter(
+          this.mriLoader.system,
+          this.camera,
+          { controls: this.camControls, mouse:this.mouse }
+        );
+        this.planeShifter.setBoundingBox(this.mriLoader.getShaderManager().getBoundingBox());
+        const round = x => Math.floor(x * 100) / 100;
+        this.planeShifter.on('translation', () => {
+          let { x, y, z } = this.mriLoader.system.position;
+          x = round(x);
+          y = round(y);
+          z = round(z);
+          this.setState({ position: { x, y, z } });
+        });
+        this.planeShifter.on('rotation', () => {
+          let { x, y, z } = this.mriLoader.system.rotation;
+          const toDeg = rad => (rad / Math.PI) * 180;
+          x = round(toDeg(x));
+          y = round(toDeg(y));
+          z = round(toDeg(z));
+          this.setState({ rotation: { x, y, z } });
+        });
+        const dimensions = this.mriLoader.getShaderManager().getDimensions();
+        const { x, y, z } = dimensions;
+        const scale = Math.min(x, y, z) / 2;
+        const diagonal = dimensions.length();
+        this.camera.position.z = diagonal;
+        this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+        const material = new THREE.MeshBasicMaterial({ color: GRAY });
+        const geometry = new THREE.SphereBufferGeometry(MESH_SIZE * scale, 8, 8);
+        this.props.regions.forEach((region, i) => {
+          region.channels.forEach((channel) => {
+            const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+            mesh.visible = false;
+            mesh.material.copy(material)
+            mesh.position.fromArray(channel.metaData.position);
+            this.scene.add(mesh);
+            if (!this.meshes[i]) {
+              this.meshes[i] = [];
+            }
+            this.meshes[i].push(mesh);
+          });
         });
       });
-    });
-    run();
+      run();
+    }
   }
   componentDidUpdate() {
     this.addCanvas();
+    if (!this.initialized) {
+      return;
+    }
+    if (!this.state.showElectrodes) {
+      this.props.regions.forEach((region, i) => {
+        region.channels.forEach((channel) => {
+          if (this.meshes[i]) {
+            this.meshes[i].forEach(mesh => { mesh.visible = false; });
+          }
+        })
+      });
+      return;
+    }
     this.props.regions.forEach((region, i) => {
       region.channels.forEach((channel) => {
         if (this.meshes[i]) {
+          this.meshes[i].forEach(mesh => { mesh.visible = true; });
           this.meshes[i].forEach(m => { m.material.color.setHex(GRAY); });
           if (this.props.selected.find(r => r === region)) {
             this.meshes[i].forEach(m => { m.material.color.setHex(WHITE); });
@@ -148,16 +169,12 @@ export class MRIViewer extends Component {
               <h4>Hold R to rotate or T to translate the planes.</h4>
           </div>
           <div className="mri-controls">
-            <div>Position:</div>
-            <NumericElement name="x" label="x" value={`${this.state.position.x}`} min={-Infinity} max={Infinity} onUserInput={(_, v) => changePos({x: v})}/>
-            <NumericElement name="y" label="y" value={`${this.state.position.y}`} min={-Infinity} max={Infinity} onUserInput={(_, v) => changePos({y: v})}/>
-            <NumericElement name="z" label="z" value={`${this.state.position.z}`} min={-Infinity} max={Infinity} onUserInput={(_, v) => changePos({z: v})}/>
-          </div>
-          <div className="mri-controls">
-            <div>Rotation:</div>
-            <NumericElement name="x" label="x" value={`${this.state.rotation.x}`} min={-180} max={180} onUserInput={(_, v) => changeRot({x: v})}/>
-            <NumericElement name="y" label="y" value={`${this.state.rotation.y}`} min={-180} max={180} onUserInput={(_, v) => changeRot({y: v})}/>
-            <NumericElement name="z" label="z" value={`${this.state.rotation.z}`} min={-180} max={180} onUserInput={(_, v) => changeRot({z: v})}/>
+            <div
+              className="round-button"
+              onClick={() => { this.setState({ showElectrodes: !this.state.showElectrodes }) }}
+            >
+              {this.state.showElectrodes ? 'Hide' : 'Show'} Electrodes
+            </div>
           </div>
           <div className="mri-controls">
             <div
