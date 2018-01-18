@@ -1,9 +1,7 @@
 import { FILTERS } from './Filters';
 import { fetch } from './fetch';
 
-const NUM_REGIONS = 8;
-const POINTS_PER_REGION = 5;
-const SAMPLES_PER_POINT = 200*60;
+/* eslint-disable no-undef */
 
 export class Channel {
   constructor(metaData, tmin=0, tmax=60) {
@@ -60,7 +58,7 @@ export class Channel {
       return; // Don't apply filters more than once
     }
     const diffFilter = new differenceequationsignal1d.DifferenceEquationSignal1D();
-    diffFilter.enableBackwardSecondPass
+    diffFilter.enableBackwardSecondPass();
     const doFilterUpdate = (coefficients, input) => {
       if (coefficients) {
         diffFilter.setInput(input);
@@ -81,6 +79,10 @@ export class Channel {
     }
     const matches = {};
     filters.forEach(filter => {
+      if (filter.key === 'hemisphere' && filter.value === 'Both') {
+        matches[filter.key] = true;
+        return;
+      }
       matches[filter.key] = matches[filter.key] || String(this.metaData[filter.key]) === filter.value
     });
     return Object.keys(matches).every(key => matches[key]);

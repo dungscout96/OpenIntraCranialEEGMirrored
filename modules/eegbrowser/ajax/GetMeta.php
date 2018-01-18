@@ -52,6 +52,7 @@ class Channel {
     public $regionID = "";
     public $regionName = "";
     public $lobeName = "";
+    public $hemisphere = "";
     public $oneCPPPR = "";
     public $nonRepeated = "";
     public $position = array(0, 0, 0);
@@ -121,20 +122,8 @@ function computeLobes($channels) {
     return $out;
 }
 
-function getHemisphere($channel) {
-    return $channel->hemisphere;
-}
-
 function computeRegionTree($channels) {
-    $hemispheres = groupBy($channels, getHemisphere);
-    $out = array();
-    foreach($hemispheres as $key => $value) {
-        $hemiNode = new InnerNode();
-        $hemiNode->label = $key;
-        $hemiNode->value = computeLobes($value);
-        $out[] = $hemiNode;
-    }
-    return $out;
+    return computeLobes($channels);
 }
 
 function channelFromRow($header, $row) {

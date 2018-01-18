@@ -9,17 +9,35 @@ const ZIP_URL = `${window.loris.BaseURL}/${window.loris.TestName}/ajax/GetChanne
 export class SignalSelectionFilter extends Component {
   constructor(props) {
     super(props);
-    this.state = { showFilters: false };
+    this.state = { hemisphere: 'Both', oneCPPPR: 'false', electrodeType: [] };
+    this.setDropdown = this.setDropdown.bind(this);
+  }
+  componentWillMount() {
+    this.props.setFilters([
+      { key: 'hemisphere', value: 'Both', keyLabel: 'Hemisphere', valueLabel: 'Both' },
+      { key: 'oneCPPPR', value: 'false', keyLabel: 'Show only one channel per patient', valueLabel: 'Show any contacts' }
+    ]);
+  }
+  setDropdown(key, value, keyLabel, valueLabel) {
+    const filters = [];
+    if (value instanceof Array) {
+      value.forEach(v => {
+        if (v === '') {
+          return;
+        }
+        filters.push({ key, value: v, keyLabel })
+      });
+    } else {
+      filters.push({ key, value, keyLabel, valueLabel });
+    }
+    const signalSelectFilters = this.props.signalSelectFilters
+      .filter(f => !(f.keyLabel === keyLabel))
+      .concat(filters);
+    this.setState({ [key]: value });
+    this.props.setFilters(signalSelectFilters);
   }
   render() {
     // BEGIN TO REMOVE
-    const addTag = (key, value, keyLabel, valueLabel) => {
-      const filter = { key, value, keyLabel, valueLabel };
-      const signalSelectFilters = this.props.signalSelectFilters
-        .filter(f => !(f.keyLabel === keyLabel && f.valueLabel === valueLabel))
-        .concat([filter]);
-      this.props.setFilters(signalSelectFilters);
-    };
     const removeFilterTag = filter => {
       const { keyLabel, valueLabel } = filter;
       const signalSelectFilters = this.props.signalSelectFilters
@@ -77,10 +95,23 @@ export class SignalSelectionFilter extends Component {
         });
     };
     const formElements = {
-      electrodeType: dropdownProps(addTag, {
+      hemisphere: dropdownProps(this.setDropdown, {
         type: 'select',
+        name: 'hemisphere',
+        value: this.state.hemisphere,
+        label: 'Hemisphere',
+        options: {
+          'Both': 'Both',
+          'Left': 'Left',
+          'Right': 'Right'
+        }
+      }),
+      electrodeType: dropdownProps(this.setDropdown, {
+        type: 'select',
+        multiple: true,
         name: 'electrodeType',
         label: 'Electrode Type',
+        value: this.state.electrodeType,
         options: {
           'D': 'Dixi sEEG',
           'M': 'Custom-built MNI sEEG',
@@ -88,13 +119,14 @@ export class SignalSelectionFilter extends Component {
           'G': 'Ad-Tech subdural grid/strip'
         }
       }),
-      oneContactPerPatientPerRegion: dropdownProps(addTag, {
+      oneContactPerPatientPerRegion: dropdownProps(this.setDropdown, {
         type: 'select',
         name: 'oneCPPPR',
-        value: this.state.oneContactPerPatientPerRegion,
+        value: this.state.oneCPPPR,
         label: 'Show only one channel per patient',
         options: {
-          true: 'Show one contact per patient per region'
+          true: 'Show one contact per patient per region',
+          false: 'Show any contacts'
         },
       })
     };
@@ -129,7 +161,7 @@ export class SignalSelectionFilter extends Component {
           className="round-button"
           onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
         >
-          {this.state.showFilters ? 'Hide' : 'Show'} selection filters
+          {this.state.showFilters ? 'Hide' : 'Show'} region filters
         </div>
         {this.state.showFilters && filterContainer}
       </Panel>

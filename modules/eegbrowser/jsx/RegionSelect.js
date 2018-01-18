@@ -95,8 +95,9 @@ export class RegionSelect extends Component {
           return node.value.map(renderInnerNode);
         case 'Leaf':
           return node.value.map(renderRegionSelector);
+        default:
+          return null;
       }
-      return null;
     };
 
     return (

@@ -14,6 +14,9 @@ const PLOTS_PER_GROUP = 8;
 const PLOT_HEIGHT = 90;
 const Y_WIDTH = 60;
 
+const INITIAL_T_BOUNDS = { tmin: -0.1, tmax: 20 };
+const INITIAL_Y_BOUNDS = { ymin: -250, ymax: 250 };
+
 export class SignalPlots extends Component {
   constructor(props) {
     super(props);
@@ -22,8 +25,8 @@ export class SignalPlots extends Component {
     this.state = {
       cursorT: null,
       group: 0,
-      tBounds: { tmin: -0.1, tmax: 20 },
-      baseYBounds: { ymin: -250, ymax: 250 },
+      tBounds: INITIAL_T_BOUNDS,
+      baseYBounds: Object.assign({}, INITIAL_Y_BOUNDS),
       yBounds: {},
       filters: { low: 'none', hi: 'none' }
     };
@@ -280,7 +283,7 @@ export class SignalPlots extends Component {
               </div>
               <div
                 className="round-button"
-                onClick={() => { this.setState({ yBounds: {}, baseYBounds: { ymin: -250, ymax: 250 } }); }}
+                onClick={() => { this.setState({ yBounds: {}, baseYBounds: Object.assign({}, INITIAL_Y_BOUNDS) }); }}
               >
                 Reset Gains
               </div>
