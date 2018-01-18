@@ -12,7 +12,6 @@ const ZOOM_AMOUNT = 1;
 const INTERVAL_MOVE_AMOUNT = 1;
 const PLOTS_PER_GROUP = 8;
 const PLOT_HEIGHT = 90;
-const Y_BOUNDS = { ymin: -250, ymax: 250 };
 const Y_WIDTH = 60;
 
 export class SignalPlots extends Component {
@@ -24,6 +23,7 @@ export class SignalPlots extends Component {
       cursorT: null,
       group: 0,
       tBounds: { tmin: -0.1, tmax: 20 },
+      baseYBounds: { ymin: -250, ymax: 250 },
       yBounds: {},
       filters: { low: 'none', hi: 'none' }
     };
@@ -69,7 +69,10 @@ export class SignalPlots extends Component {
       if (index >= minPlot && index <= maxPlot) {
         const zoom = (leftClick, multiplier) => {
           if (leftClick) {
-            this.state.yBounds[channel.metaData.name] = this.state.yBounds[channel.metaData.name] || Y_BOUNDS;
+            if (!this.state.yBounds[channel.metaData.name]) {
+              const { ymin, ymax } = this.state.baseYBounds;
+              this.state.yBounds[channel.metaData.name] = { ymin, ymax };
+            }
             let { ymin, ymax } = this.state.yBounds[channel.metaData.name];
             ymin *= multiplier;
             ymax *= multiplier;
@@ -77,7 +80,7 @@ export class SignalPlots extends Component {
             this.setState({ yBounds: this.state.yBounds });
           }
         };
-        const { ymin, ymax } = this.state.yBounds[channel.metaData.name] || Y_BOUNDS;
+        const { ymin, ymax } = this.state.yBounds[channel.metaData.name] || this.state.baseYBounds;
         plotElements.push(
           <SignalPlot
             key={`${channel.metaData.name}-${index}`}
@@ -165,6 +168,7 @@ export class SignalPlots extends Component {
     };
     const enabled = (text, incr) => (
       <div
+        style={{ width: '145px' }}
         className="round-button"
         onClick={() => { this.setState({ group: this.state.group + incr }); }}
       >
@@ -172,7 +176,7 @@ export class SignalPlots extends Component {
       </div>
     );
     const disabled = text => (
-      <div className="round-button disabled">
+      <div style={{ width: '145px' }} className="round-button disabled">
         {text}
       </div>
     );
@@ -194,6 +198,66 @@ export class SignalPlots extends Component {
     const noPlotsScreen = (
       <div className="no-plots-screen">
         <h4>Select a region or lobe to display signals.</h4>
+        <h4>Change the time scale with Shift + mouse drag/scroll.</h4>
+      </div>
+    );
+    const zoomAll = (leftClick, multiplier) => {
+      if (leftClick) {
+        let { ymin, ymax } = this.state.baseYBounds;
+        ymin *= multiplier;
+        ymax *= multiplier;
+        Object.keys(this.state.yBounds).forEach(key => {
+          let { ymin, ymax } = this.state.yBounds[key];
+          ymin *= multiplier;
+          ymax *= multiplier;
+          this.state.yBounds[key] = { ymin , ymax };
+        });
+        this.setState({ baseYBounds: { ymin, ymax }, yBounds: this.state.yBounds });
+      }
+    };
+    const updatePage = (leftClick, direction) => {
+      if (leftClick) {
+        let { tmin, tmax } = this.state.tBounds;
+        const interval = Math.abs(tmax - tmin);
+        tmin += interval * direction;
+        tmax += interval * direction;
+        this.setState({ tBounds: { tmin, tmax } });
+      }
+    };
+    const updateTime = (leftClick, increment) => {
+      if (leftClick) {
+        let { tmin, tmax } = this.state.tBounds;
+        tmin += increment;
+        tmax += increment;
+        this.setState({ tBounds: { tmin, tmax } });
+      }
+    };
+    const timeControl = (
+      <div className="toolbar-hor-group">
+        <div
+          className="round-button"
+          onClick={e => { updatePage(e.button === 0, -1); }}
+        >
+          {'<<'} 1 Page
+        </div>
+        <div
+          className="round-button"
+          onClick={e => { updateTime(e.button === 0, -1); }}
+        >
+          {'<'} 1 sec
+        </div>
+        <div
+          className="round-button"
+          onClick={e => { updateTime(e.button === 0, +1); }}
+        >
+          1 sec {'>'}
+        </div>
+        <div
+          className="round-button"
+          onClick={e => { updatePage(e.button === 0, +1); }}
+        >
+         1 Page {'>>'}
+        </div>
       </div>
     );
     return (
@@ -201,17 +265,31 @@ export class SignalPlots extends Component {
         <div className="toolbar">
           <div className="toolbar-layer">
             <div className="toolbar-hor-group">
-              {showPrev ? enabled('Previous', -1) : disabled('Previous')}
-              {showNext ? enabled('Next', +1) : disabled('Next')}
+              {showPrev ? enabled('Previous Channel', -1) : disabled('Previous Channels')}
+              {showNext ? enabled('Next Channels', +1) : disabled('Next Channels')}
               {numChannels > 0 ? showingPlots : null}
             </div>
           </div>
           <div className="toolbar-layer">
-            <div
-              className="round-button"
-              onClick={() => { this.setState({ yBounds: {} }); }}
-            >
-              Reset Y Zoom
+            <div className="toolbar-hor-group">
+              <div
+                className="round-button"
+                onClick={e => { zoomAll(e.button === 0, 1.1); }}
+              >
+                Zoom -
+              </div>
+              <div
+                className="round-button"
+                onClick={() => { this.setState({ yBounds: {}, baseYBounds: { ymin: -250, ymax: 250 } }); }}
+              >
+                Reset Gains
+              </div>
+              <div
+                className="round-button"
+                onClick={e => { zoomAll(e.button === 0, 0.9); }}
+              >
+                Zoom +
+              </div>
             </div>
             <div className="signal-plots-filters">
               <SignalProcessingSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
@@ -219,9 +297,7 @@ export class SignalPlots extends Component {
             </div>
           </div>
           <div className="toolbar-layer">
-            <div style={{ marginLeft: '15px' }}>
-              <h4>Change time scale with Shift + mouse scroll</h4>
-            </div>
+            {plotElements.length === 0 ? null : timeControl}
           </div>
         </div>
         <div

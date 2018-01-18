@@ -107,7 +107,7 @@ export class SignalSelectionFilter extends Component {
         >
         </FormElement>
         <hr />
-        <div style={{ display: 'inline-block', width: '240px' }} className="round-button">
+        <div style={{ display: 'inline-block', width: '155px' }} className="round-button">
           <a
             href={`${window.loris.BaseURL}/document_repository`}
             target="_blank"

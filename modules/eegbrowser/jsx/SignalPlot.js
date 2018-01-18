@@ -125,9 +125,11 @@ export class SignalPlot extends Component {
   }
   componentDidMount() {
     this.props.channel && this.props.channel.fetch().then(() => {
-      this.renderPlot();
-      this.updatePlot();
-      this.setState({ channelResolved: true });
+      if (this.div) {
+        this.renderPlot();
+        this.updatePlot();
+        this.setState({ channelResolved: true });
+      }
     });
   }
   componentDidUpdate() {
@@ -154,13 +156,9 @@ export class SignalPlot extends Component {
      .text(symbol);
     return g;
   };
-  drawLink(svg, create = true) {
+  drawLink(svg) {
     if (this.link) {
       let svgHeight = svg.node().getBoundingClientRect().height;
-      // On plot creation, we dont have the true height yet.
-      if (create && this.props.xAxisOrientation === 'bottom') {
-        svgHeight += 50;
-      }
       const axisWidth = this.props.yAxisWidth || 60;
       d3.select(this.link)
         .style('left', `${axisWidth + 10}px`)
@@ -211,7 +209,7 @@ export class SignalPlot extends Component {
     const { width, height } = this.getDimensions();
     const { div, svg, g } = this.plot;
     const { indexes, cursTime, cursVal } = this.getSignalIndexes();
-    this.drawLink(svg, false)
+    this.drawLink(svg)
     if (this.plot.cursorTick) {
       this.plot.cursorTick.remove();
       this.plot.cursorTick = null;
