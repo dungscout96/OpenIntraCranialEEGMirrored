@@ -338,6 +338,8 @@ $(document).ready(function() {
 
   $(".loading").hide();
   $(".directory").click(toggleDirectory);
+  $(".directory").click();
 
   $('.directory').popover({trigger: "hover"});
+
 });

@@ -60,6 +60,7 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
 
         $query  = " FROM document_repository v";
         $query .= " WHERE COALESCE(v.hide_video, false)=false";
+##        $query .= " AND File_type = '4' ";
 
         // set the class variables
         $this->columns = array(
@@ -69,15 +70,16 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
                           'v.File_size',
                           'v.File_category',
                           'v.File_type',
-                          'v.Instrument',
-                          'v.uploaded_by',
-                          'v.For_site',
-                          'v.comments',
-                          'v.Data_dir',
-                          'v.Date_uploaded',
+              //            'v.Instrument',
+             //             'v.uploaded_by',
+              //            'v.For_site',
+              //            'v.comments',
+              //            'v.Data_dir',
+              //            'v.Date_uploaded',
                          );
 
         $openAccordion = $_GET['openAccordion'];
+        // $openAccordion = true; 
         $this->tpl_data['openAccordion'] = $openAccordion;
         $filtered = $_GET['filtered'];
         $this->tpl_data['filtered'] = $filtered;
@@ -86,23 +88,23 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
         $this->order_by     = 'v.File_name';
         $this->headers      = array(
                                'File_name',
-                               'version',
-                               'File_type',
-                               'Instrument',
-                               'uploaded_by',
-                               'For_site',
-                               'comments',
-                               'Date_uploaded',
-                               'Edit',
-                               'Delete',
+         //                      'version',
+         //                      'File_type',
+        //                       'Instrument',
+        //                       'uploaded_by',
+        //                       'For_site',
+        //                       'comments',
+        //                       'Date_uploaded',
+        //                       'Edit',
+        //                       'Delete',
                               );
         $this->validFilters = array(
-                               'v.For_site',
+          //                     'v.For_site',
                                'v.File_name',
                                'v.File_category',
                                'v.File_type',
                                'v.version',
-                               'v.uploaded_by',
+         //                      'v.uploaded_by',
                               );
 
         $this->formToFilter = array(
@@ -111,8 +113,8 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
                                'File_category' => 'v.File_category',
                                'version'       => 'v.version',
                                'Data_dir'      => 'v.Data_dir',
-                               'For_site'      => 'v.For_site',
-                               'uploaded_by'   => 'v.uploaded_by',
+            //                   'For_site'      => 'v.For_site',
+            //                   'uploaded_by'   => 'v.uploaded_by',
                                'Date_uploaded' => 'v.Date_uploaded',
                               );
         return true;
@@ -171,18 +173,18 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
         $fileTypes = array_merge(array(null => 'Any') + $fileTypes);
 
         // Form Elements
-        $this->addBasicText('File_name', 'File name:');
-        $this->addBasicText('version', 'Version:');
+        $this->addBasicText('File_name', 'Search:');
+//        $this->addBasicText('version', 'Version:');
 
-        $this->addSelect('File_type', 'File type:', $fileTypes);
+     //   $this->addSelect('File_type', 'File type:', $fileTypes);
         $this->addSelect('File_category', 'File category:', $fileCategories);
         $this->tpl_data['Sites']       = $list_of_sites;
-        $this->tpl_data['Instruments'] = $list_of_instruments;
+     // $this->tpl_data['Instruments'] = $list_of_instruments;
         $user   =& User::singleton();
         $userID = $user->getData('UserID');
         $this->tpl_data['User'] = $userID;
-        $this->addSelect('For_site', 'For Site:', $list_of_sites);
-        $this->addBasicText('uploaded_by', 'Uploaded By:');
+     //   $this->addSelect('For_site', 'For Site:', $list_of_sites);
+     //   $this->addBasicText('uploaded_by', 'Uploaded By:');
 
         return true;
     }
@@ -405,7 +407,7 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
             $DisplayItem  = $item;
             $DisplayItem['File_name'] = utf8_encode($item['File_name']);
             $DisplayItem['File_size'] = $this->formatSize($item['File_size']);
-            $DisplayItem['For_site']  = $site_names[$item['For_site']];
+//            $DisplayItem['For_site']  = $site_names[$item['For_site']];
 
             if (is_array($FileCategory['Files'])) {
                 array_push($FileCategory['Files'], $DisplayItem);

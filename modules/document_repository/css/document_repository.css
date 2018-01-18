@@ -325,6 +325,9 @@ label em {
 .fileColumn{
     min-width: 350px;
 }
+.directory{
+    font-family: verdana, Glyphicons Halflings, sans-serif;
+}
 .directoryRow{
     height: 50px;
 }

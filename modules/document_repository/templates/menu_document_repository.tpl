@@ -35,13 +35,15 @@
 </script>
 <script id="file" type="x-tmpl-mustache">
     <tr class="{{ parentID }}a fileRow" {{ ^filtered }}style="display:none" {{ /filtered }}>
-        <td class="blah fileColumn">
+        <td class="blah fileColumn" colspan="4">
+        <!-- ##<td class="blah fileColumn" >   -->
             <div {{ ^filtered }}class="fileDDD" style="{{ margin }}"{{ /filtered }}><div style="padding-top: 8px">
                 <a href="{/literal}{$baseurl}{literal}/document_repository/ajax/GetFile.php?File={{ Data_dir }}" target="_blank" download="{{ File_name }}">
                         {{ File_name }}
                 </a>({{ File_size }})
             </div></div>
         </td>
+<!-- ###
         <td>
             {{ version }}
         </td>
@@ -69,6 +71,7 @@
         <td nowrap="nowrap">
             <a href="#" id="{{ record_id }}" class="thedeletelink">Delete</a>
         </td>
+-->
     </tr>
 </script>
 {/literal}
@@ -105,28 +108,33 @@
                     <div class="row">
                         <div class="form-group">
                             <div class="col-sm-2 col-sm-offset-4">
-                                <input type="submit" name="filter" value="Show Data" class="btn btn-sm btn-primary col-xs-12" />
+                                <input type="submit" name="filter" value="Show Files" class="btn btn-sm btn-primary col-xs-12" />
                             </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="col-sm-2">
-                                <input type="button" name="reset" value="Clear Form" class="btn btn-sm btn-primary col-xs-12" onclick="location.href='{$baseURL}/document_repository/?reset=true'" />
+                                <input type="button" name="reset" value="Clear" class="btn btn-sm btn-primary col-xs-12" onclick="location.href='{$baseURL}/document_repository/?reset=true'" />
                             </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="col-sm-2">
+<!--- ###
+
                                 <button type="button" name = "upload" class = "btn btn-sm btn-primary col-xs-12" data-toggle="modal" data-target="#fileUploadModal">Upload File</button>
+-->
                             </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="visible-xs col-xs-12"> </div>
                             <div class="col-sm-2">
+<!--- ###
                                 <button type="button" name = "addCategory" class = "btn btn-sm btn-primary col-xs-12" data-toggle="modal" data-target="#addCategoryModal">Add Category</button>
+--> 
                             </div>
                         </div>
                     </div>
