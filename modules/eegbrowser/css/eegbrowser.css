@@ -26,6 +26,7 @@
 
 .region-select {
   flex: 0.8;
+  min-width: 145px;
 }
 
 .region-select-list {
@@ -116,7 +117,7 @@
 }
 
 .mri-view-container {
-  flex: 2;
+  flex: 1;
   align-items: center;
 }
 

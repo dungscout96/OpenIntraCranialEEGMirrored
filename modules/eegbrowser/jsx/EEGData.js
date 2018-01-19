@@ -140,6 +140,7 @@ export const instantiateRegions = (node, path = []) => {
       const label = path[0].label + ' ' + region.label;
       region.value.forEach(channel => {
         channel.oneCPPPR = String(channel.oneCPPPR);
+        channel.position = new THREE.Vector3().fromArray(channel.position)
       })
       return new Region(label, region.value);
     });

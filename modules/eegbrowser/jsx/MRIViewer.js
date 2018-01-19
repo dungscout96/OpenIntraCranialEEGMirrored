@@ -14,18 +14,53 @@ export class MRIViewer extends Component {
     this.state = {
       showElectrodes: false,
       position: { x: 0, y: 0, z: 0 },
-      rotation: { x: 0, y: 0, z: 0 }
+      rotation: { x: 0, y: 0, z: 0 },
     }
+    this.mouse = new THREE.Vector2();
+    this.rayCaster = new THREE.Raycaster();
+    this.selectRegionAtMouse = this.selectRegionAtMouse.bind(this);
+    this.displacementFromRegion = new THREE.Vector3();
+  }
+  selectRegionAtMouse(event) {
+    if (event.button !== 2) {
+      return;
+    }
+    event.preventDefault();
+    if (!this.camera || !this.mriLoader.system) {
+      return;
+    }
+    this.rayCaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.rayCaster.intersectObjects(this.mriLoader.system.children);
+    if (intersects.length === 0) {
+      return;
+    }
+    const hitPoint = intersects[0].point;
+    let minDistance = -Infinity;
+    let minRegion;
+    this.props.regions.forEach((region, i) => {
+      region.channels.forEach((channel) => {
+        this.displacementFromRegion.subVectors(channel.metaData.position, hitPoint);
+        const distance = this.displacementFromRegion.length();
+        if (!minRegion || minDistance > distance) {
+          minRegion = region;
+          minDistance = distance;
+        }
+      })
+    })
+    if (this.props.selected.find(r => r === minRegion)) {
+      this.props.unselectRegions([minRegion]);
+      return;
+    }
+    this.props.selectRegions([minRegion]);
   }
   componentWillReceiveProps(newProps) {
     if (!this.initialized && !this.props.showMRI && newProps.showMRI) {
       this.initialized = true;
-      const width = 400;
-      const height = 350;
+      const width = 300;
+      const height = 250;
       const renderer = new THREE.WebGLRenderer();
       renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0, 1.0));
       const self = this;
-      self.mouse = new THREE.Vector2();
       function run() {
         renderer.render(self.scene, self.camera);
         window.requestAnimationFrame(run);
@@ -47,6 +82,7 @@ export class MRIViewer extends Component {
       this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 100000);
       this.camControls = new THREE.OrbitControls(this.camera, this.canvas);
       this.camControls.enableKeys = false;
+      delete this.camControls.mouseButtons['PAN'];
       this.scene = new THREE.Scene();
       this.mriLoader = new MRILoader(this.scene);
       this.meshes = [];
@@ -84,9 +120,9 @@ export class MRIViewer extends Component {
         this.props.regions.forEach((region, i) => {
           region.channels.forEach((channel) => {
             const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
-            mesh.visible = false;
             mesh.material.copy(material)
-            mesh.position.fromArray(channel.metaData.position);
+            mesh.position.copy(channel.metaData.position);
+            mesh.visible = this.state.showElectrodes;
             this.scene.add(mesh);
             if (!this.meshes[i]) {
               this.meshes[i] = [];
@@ -98,25 +134,24 @@ export class MRIViewer extends Component {
       run();
     }
   }
+  setVisibility() {
+    this.props.regions.forEach((region, i) => {
+      region.channels.forEach((channel) => {
+        if (this.meshes[i]) {
+          this.meshes[i].forEach(mesh => { mesh.visible = this.state.showElectrodes; });
+        }
+      })
+    });
+  }
   componentDidUpdate() {
     this.addCanvas();
     if (!this.initialized) {
       return;
     }
-    if (!this.state.showElectrodes) {
-      this.props.regions.forEach((region, i) => {
-        region.channels.forEach((channel) => {
-          if (this.meshes[i]) {
-            this.meshes[i].forEach(mesh => { mesh.visible = false; });
-          }
-        })
-      });
-      return;
-    }
+    this.setVisibility();
     this.props.regions.forEach((region, i) => {
       region.channels.forEach((channel) => {
         if (this.meshes[i]) {
-          this.meshes[i].forEach(mesh => { mesh.visible = true; });
           this.meshes[i].forEach(m => { m.material.color.setHex(GRAY); });
           if (this.props.selected.find(r => r === region)) {
             this.meshes[i].forEach(m => { m.material.color.setHex(WHITE); });
@@ -163,7 +198,9 @@ export class MRIViewer extends Component {
       };
       return (
         <div className="mri-view-container">
-          <div ref={(div) => { this.container = div; }}>
+          <div
+            onMouseDown={this.selectRegionAtMouse}
+            ref={(div) => { this.container = div; }}>
           </div>
           <div className="mri-controls">
               <h4>Hold R to rotate or T to translate the planes.</h4>

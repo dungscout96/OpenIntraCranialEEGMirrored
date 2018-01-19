@@ -68,6 +68,8 @@ export default class EEGBrowser extends Component {
         regions={leaves}
         selected={this.state.selected}
         signalSelectFilters={this.state.signalSelectFilters}
+        unselectRegions={unselectRegions}
+        selectRegions={selectRegions}
         hoveredRegions={this.state.hoveredRegions}
         showMRI={this.state.expanded >= 2}
       >
