@@ -83,6 +83,14 @@ export class Channel {
         matches[filter.key] = true;
         return;
       }
+      if (filter.key === 'electrodeType' && filter.value === 'all') {
+        matches[filter.key] = true;
+        return;
+      }
+      if (filter.key === 'oneCPPPR' && filter.value === 'false') {
+        matches[filter.key] = true;
+        return;
+      }
       matches[filter.key] = matches[filter.key] || String(this.metaData[filter.key]) === filter.value
     });
     return Object.keys(matches).every(key => matches[key]);
@@ -93,9 +101,11 @@ const colorMapper = new pixpipe.Colormap()
 colorMapper.setStyle('jet')
 colorMapper.buildLut(39)
 
-export const filterChannels = (filters, regions) => regions
-  .map(r => r.channels.filter(channel => channel.testSelectionFilters(filters)))
-  .reduce((a,b) => b.concat(a), []);
+export const filterChannels = (filters, regions) => {
+  return regions
+    .map(r => r.channels.filter(channel => channel.testSelectionFilters(filters)))
+    .reduce((a,b) => b.concat(a), []);
+}
 
 export class Region {
   constructor(name, channelMetas) {
@@ -128,6 +138,9 @@ export const instantiateRegions = (node, path = []) => {
     node.type = 'Leaf';
     node.value = node.value.map(region => {
       const label = path[0].label + ' ' + region.label;
+      region.value.forEach(channel => {
+        channel.oneCPPPR = String(channel.oneCPPPR);
+      })
       return new Region(label, region.value);
     });
     return;

@@ -20,24 +20,25 @@
 
 .no-plots-screen {
   text-align: center;
-  border-style: solid;
-  border-color: #4A4A4A;
+  height: 100%;
+  background-color: #eee;
 }
 
 .region-select {
-  flex: 1.5;
+  flex: 0.8;
 }
 
 .region-select-list {
   margin-top: 10px;
-  padding: 5px 10px;
+  margin-left: 0;
+  padding: 5px 0;
   flex: 1;
   list-style: none;
 }
 
 .region-select-item {
   cursor: pointer;
-  margin: 10px 10px;
+  margin: 10px 0;
 }
 
 .region-select-item:hover {
@@ -132,7 +133,9 @@
   display: -ms-flexbox;
   display: flex;
 
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: center;
+  margin-bottom: 5px;
 }
 
 .toolbar-layer {
@@ -167,11 +170,12 @@
 }
 
 .round-button {
+  text-align: center;
   background-color: #064785;
   color: #fff;
   height: 30px;
   padding: 5px 5px;
-  margin: 5px 15px;
+  margin: 15px 7px;
   border-radius: 5px;
   cursor: pointer;
 
@@ -179,6 +183,10 @@
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+
+.round-button--padded {
+  padding: 5px 10px;
 }
 
 .round-button a {
@@ -219,8 +227,11 @@
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: 200px;
   font-size: 0;
+}
+
+.signal-plots.padded-bottom {
+  padding-bottom: 200px;
 }
 
 #page {

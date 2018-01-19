@@ -9,27 +9,10 @@ export class RegionSelect extends Component {
       selected: [],
     };
     this.state = {
-      activePage: props.brain,
-      pageStack: []
+      expanded: {},
     };
   }
   render() {
-    const clickPage = (node) => {
-      const lastPage = this.state.activePage;
-      const { pageStack } = this.state;
-      pageStack.push(lastPage);
-      this.setState({ activePage: node, pageStack });
-    };
-    const back = () => {
-      if (this.state.pageStack.length === 0) {
-        return;
-      }
-      const activePage = this.state.pageStack.pop();
-      this.setState({
-        activePage,
-        pageStack: this.state.pageStack
-      });
-    };
     const renderRegionElement = (region, selected, onclick) => {
       const c = region.colorCode;
       return (
@@ -55,6 +38,11 @@ export class RegionSelect extends Component {
       }
       return renderRegionElement(region, false, r => this.props.selectRegions([r]));
     };
+    const clickPage = node => {
+      const { expanded } = this.state;
+      expanded[node.label] = !expanded[node.label];
+      this.setState({ expanded });
+    };
     const renderInnerNode = (node) => {
         const regions = getLeafRegions(node);
         const contained = regions.map(r => this.props.selected.includes(r)).reduce((a, b) => a && (!!b), true);
@@ -75,15 +63,19 @@ export class RegionSelect extends Component {
           </div>
         );
         return (
-          <li
-            key={node.label}
-            className="region-select-item"
-            onClick={() => clickPage(node)}
-            onMouseEnter={() => { this.props.hoverRegions(regions); }}
-            onMouseLeave={this.props.onMouseLeave}
-          >
-            {node.label} {allButton}
-          </li>
+          <div key={node.label} className="region-select-item-container">
+            <li
+              className="region-select-item"
+              onClick={() => clickPage(node)}
+              onMouseEnter={() => { this.props.hoverRegions(regions); }}
+              onMouseLeave={this.props.onMouseLeave}
+            >
+              {node.label} {allButton}
+            </li>
+            <div>
+              {this.state.expanded[node.label] ? node.value.map(renderRegionSelector) : null}
+            </div>
+          </div>
       );
     };
     const renderNode = (node) => {
@@ -102,20 +94,11 @@ export class RegionSelect extends Component {
 
     return (
       <div className="region-select">
-        <div className="toolbar">
-          <div className="toolbar-layer">
-            <div className="toolbar-buttons">
-              <div
-                className={`round-button${this.state.pageStack.length === 0 ? ' disabled' : ''}`}
-                onClick={back}
-              >
-                Back
-              </div>
-            </div>
-          </div>
+        <div className="round-button" onClick={() => this.setState({ expanded: {} })}>
+          Collapse all
         </div>
         <ul className="region-select-list">
-          {renderNode(this.state.activePage)}
+          {renderNode(this.props.brain)}
         </ul>
       </div>
     );

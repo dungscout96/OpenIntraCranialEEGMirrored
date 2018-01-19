@@ -171,7 +171,7 @@ export class SignalPlots extends Component {
     };
     const enabled = (text, incr) => (
       <div
-        style={{ width: '145px' }}
+        style={{ width: '85px' }}
         className="round-button"
         onClick={() => { this.setState({ group: this.state.group + incr }); }}
       >
@@ -179,7 +179,7 @@ export class SignalPlots extends Component {
       </div>
     );
     const disabled = text => (
-      <div style={{ width: '145px' }} className="round-button disabled">
+      <div style={{ width: '85px' }} className="round-button disabled">
         {text}
       </div>
     );
@@ -239,60 +239,64 @@ export class SignalPlots extends Component {
       <div className="toolbar-hor-group">
         <div
           className="round-button"
+          style={{ 'marginRight': '1px' }}
           onClick={e => { updatePage(e.button === 0, -1); }}
         >
-          {'<<'} 1 Page
+          {'<<'}
         </div>
         <div
-          className="round-button"
+          className="round-button round-button--padded"
+          style={{ 'marginLeft': '1px', 'marginRight': '1px' }}
           onClick={e => { updateTime(e.button === 0, -1); }}
         >
-          {'<'} 1 sec
+          {'<'}
         </div>
         <div
-          className="round-button"
+          className="round-button round-button--padded"
+          style={{ 'marginLeft': '1px', 'marginRight': '1px' }}
           onClick={e => { updateTime(e.button === 0, +1); }}
         >
-          1 sec {'>'}
+          {'>'}
         </div>
         <div
           className="round-button"
+          style={{ 'marginLeft': '1px' }}
           onClick={e => { updatePage(e.button === 0, +1); }}
         >
-         1 Page {'>>'}
+         {'>>'}
         </div>
       </div>
     );
     return (
       <div className="signal-plots-container">
+        {numChannels > 0 ? showingPlots : null}
         <div className="toolbar">
           <div className="toolbar-layer">
             <div className="toolbar-hor-group">
-              {showPrev ? enabled('Previous Channel', -1) : disabled('Previous Channels')}
-              {showNext ? enabled('Next Channels', +1) : disabled('Next Channels')}
-              {numChannels > 0 ? showingPlots : null}
-            </div>
-          </div>
-          <div className="toolbar-layer">
-            <div className="toolbar-hor-group">
               <div
-                className="round-button"
+                className="round-button round-button--padded"
+                style={{ 'marginRight': '1px' }}
                 onClick={e => { zoomAll(e.button === 0, 1.1); }}
               >
-                Zoom -
+                -
               </div>
               <div
                 className="round-button"
+                style={{ 'marginLeft': '1px', 'marginRight': '1px' }}
                 onClick={() => { this.setState({ yBounds: {}, baseYBounds: Object.assign({}, INITIAL_Y_BOUNDS) }); }}
               >
-                Reset Gains
+                Reset
               </div>
               <div
-                className="round-button"
+                className="round-button round-button--padded"
+                style={{ 'marginLeft': '1px' }}
                 onClick={e => { zoomAll(e.button === 0, 0.9); }}
               >
-                Zoom +
+                +
               </div>
+            </div>
+            <div className="toolbar-hor-group">
+              {timeControl}
             </div>
             <div className="signal-plots-filters">
               <SignalProcessingSelect filters={HIGH_PASS_FILTERS} filter={this.state.filters.hi} onChange={selectHi} />
@@ -300,11 +304,14 @@ export class SignalPlots extends Component {
             </div>
           </div>
           <div className="toolbar-layer">
-            {plotElements.length === 0 ? null : timeControl}
+            <div className="toolbar-hor-group">
+              {showPrev ? enabled('<<Previous', -1) : disabled('<<Previous')}
+              {showNext ? enabled('Next>>', +1) : disabled('Next>>')}
+            </div>
           </div>
         </div>
         <div
-          className="signal-plots"
+          className={`signal-plots${plotElements.length === 0 ? ' padded-buttom' : ''}`}
           ref={(container) => { this.container = container; }}
           onWheel={(e) => { if (e.shiftKey) { e.preventDefault(); onWheel(e.deltaY); } }}
           onMouseMove={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}

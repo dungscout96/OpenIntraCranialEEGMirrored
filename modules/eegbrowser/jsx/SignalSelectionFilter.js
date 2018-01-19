@@ -14,8 +14,8 @@ export class SignalSelectionFilter extends Component {
   }
   componentWillMount() {
     this.props.setFilters([
-      { key: 'hemisphere', value: 'Both', keyLabel: 'Hemisphere', valueLabel: 'Both' },
-      { key: 'oneCPPPR', value: 'false', keyLabel: 'Show only one channel per patient', valueLabel: 'Show any contacts' }
+      { key: 'hemisphere', value: 'Both', keyLabel: 'Hemisphere:', valueLabel: 'Both' },
+      { key: 'oneCPPPR', value: 'false', keyLabel: 'Show channels:', valueLabel: 'All channels' }
     ]);
   }
   setDropdown(key, value, keyLabel, valueLabel) {
@@ -95,41 +95,54 @@ export class SignalSelectionFilter extends Component {
         });
     };
     const formElements = {
-      hemisphere: dropdownProps(this.setDropdown, {
+      oneContactPerPatientPerRegion: dropdownProps(this.setDropdown, {
         type: 'select',
-        name: 'hemisphere',
-        value: this.state.hemisphere,
-        label: 'Hemisphere',
+        name: 'oneCPPPR',
+        emptyOption: false,
+        value: this.state.oneCPPPR,
+        label: 'Show channels:',
         options: {
-          'Both': 'Both',
-          'Left': 'Left',
-          'Right': 'Right'
-        }
+          false: 'All channels',
+          true: 'One channel per patient per region'
+        },
       }),
       electrodeType: dropdownProps(this.setDropdown, {
         type: 'select',
         multiple: true,
+        emptyOption: false,
         name: 'electrodeType',
-        label: 'Electrode Type',
+        label: 'Electrode Type:',
         value: this.state.electrodeType,
         options: {
+          'all': 'All Types',
           'D': 'Dixi sEEG',
           'M': 'Custom-built MNI sEEG',
           'A': ' Ad-Tech depth',
           'G': 'Ad-Tech subdural grid/strip'
         }
       }),
-      oneContactPerPatientPerRegion: dropdownProps(this.setDropdown, {
+      hemisphere: dropdownProps(this.setDropdown, {
         type: 'select',
-        name: 'oneCPPPR',
-        value: this.state.oneCPPPR,
-        label: 'Show only one channel per patient',
+        name: 'hemisphere',
+        emptyOption: false,
+        value: this.state.hemisphere,
+        label: 'Hemisphere:',
         options: {
-          true: 'Show one contact per patient per region',
-          false: 'Show any contacts'
-        },
+          'Both': 'Both',
+          'Left': 'Left',
+          'Right': 'Right'
+        }
       })
     };
+    const toggleFilters = (
+      <div
+        style={{ width: '160px' }}
+        className="round-button"
+        onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
+      >
+        {this.state.showFilters ? 'Hide' : 'Show'} region filters
+      </div>
+    );
     return (
       <Panel title="Channel Selection Filters">
         <FormElement
@@ -156,13 +169,7 @@ export class SignalSelectionFilter extends Component {
           Download Selected Raw Signals
         </div>
         <hr />
-        <div
-          style={{ width: '160px' }}
-          className="round-button"
-          onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
-        >
-          {this.state.showFilters ? 'Hide' : 'Show'} region filters
-        </div>
+        {this.props.selectedRegions.length === 0 ? null : toggleFilters}
         {this.state.showFilters && filterContainer}
       </Panel>
     );

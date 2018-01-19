@@ -21,7 +21,7 @@ const drawSecondTicks = (ctx, height, tScale, tmin, tmax) => {
   const ctmin = Math.ceil(tmin);
   const ctmax = Math.ceil(tmax);
   ctx.strokeStyle = '#999';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.3;
   for (let t = ctmin; t < ctmax; t++) {
     ctx.beginPath();
     ctx.moveTo(tScale(t), 0);
@@ -226,7 +226,7 @@ export class SignalPlot extends Component {
           .attr('x', cursorPos)
           .attr('y', STATS_TOP_OFFSET)
           .attr('font-size', CURSOR_FONT_SIZE)
-          .text(`${this.props.xAxisLabel}: ${cursTime}\nvalue (${this.props.yAxisLabel}): ${cursVal}`);
+          .text(`${this.props.xAxisLabel}: ${cursTime} | value (${this.props.yAxisLabel}): ${cursVal}`);
       }
     }
     if (this.plot.xAx) {
@@ -287,7 +287,7 @@ export class SignalPlot extends Component {
                   .style('position', 'relative')
                   .style('top', `${-height}px`);
     let g = svg.append('g')
-               .attr('transform', `translate(${yAxisWidth || 60}, ${0})`)
+               .attr('transform', `translate(${yAxisWidth | 60}, ${0})`)
                .attr('width', '100%');
     const canvas = d3.select(this.canvas)
                      .attr('x', yAxisWidth || 60)
@@ -322,7 +322,7 @@ export class SignalPlot extends Component {
          .attr('x', cursorPos)
          .attr('y', STATS_TOP_OFFSET)
          .attr('font-size', CURSOR_FONT_SIZE)
-         .text(`${this.props.xAxisLabel}: ${cursTime}\nvalue (${this.props.yAxisLabel}): ${cursVal}`);
+         .text(`${this.props.xAxisLabel}: ${cursTime} || value (${this.props.yAxisLabel}): ${cursVal}`);
       }
     }
     let xAx = null;
