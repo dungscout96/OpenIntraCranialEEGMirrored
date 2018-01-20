@@ -1,3 +1,7 @@
+hr {
+  margin: 1px 1px;
+}
+
 .domain {
   fill: none;
   stroke: black;
@@ -22,11 +26,12 @@
   text-align: center;
   height: 100%;
   background-color: #eee;
+  min-height: 400px;
 }
 
 .region-select {
   flex: 0.8;
-  min-width: 145px;
+  min-width: 170px;
 }
 
 .region-select-list {

@@ -70,6 +70,8 @@ export class RegionSelect extends Component {
               onMouseEnter={() => { this.props.hoverRegions(regions); }}
               onMouseLeave={this.props.onMouseLeave}
             >
+              <span className={`glyphicon${this.state.expanded[node.label] ? ' glyphicon-chevron-down' : ' glyphicon-chevron-right'}`}>
+              </span>
               {node.label} {allButton}
             </li>
             <div>
@@ -91,10 +93,15 @@ export class RegionSelect extends Component {
           return null;
       }
     };
-
+    const lobeKeys = Object.keys(this.state.expanded);
+    const showCollapseAll = lobeKeys.length > 0 && lobeKeys.every(k => this.state.expanded[k]);
     return (
       <div className="region-select">
-        <div className="round-button" onClick={() => this.setState({ expanded: {} })}>
+        <div
+          style={{ maxWidth: '100px', visibility: showCollapseAll ? 'visible' : 'hidden' }}
+          className="round-button"
+          onClick={() => this.setState({ expanded: {} })}
+        >
           Collapse all
         </div>
         <ul className="region-select-list">

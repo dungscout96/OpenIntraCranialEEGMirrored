@@ -18,7 +18,7 @@ export default class EEGBrowser extends Component {
       selected: [],
       signalSelectFilters: [],
       hoveredRegions: [],
-      expanded: 1
+      expandMode: 1
     };
   }
   render() {
@@ -35,22 +35,6 @@ export default class EEGBrowser extends Component {
           .filter(r => !regions.includes(r))
       });
     };
-    const expandBarLeft = (
-      <div
-        className="expand-bar"
-        onClick={() => this.setState({ expanded: Math.max(this.state.expanded - 1, 0) })}
-      >
-        <span className="expand-bar-icon">{'<'}</span>
-      </div>
-    );
-    const expandBarRight = (
-      <div
-        className="expand-bar"
-        onClick={() => this.setState({ expanded: Math.min(this.state.expanded + 1, 2) })}
-      >
-        <span className="expand-bar-icon">{'>'}</span>
-      </div>
-    );
     const regionSelect = (
       <RegionSelect
         brain={this.state.brain}
@@ -71,7 +55,7 @@ export default class EEGBrowser extends Component {
         unselectRegions={unselectRegions}
         selectRegions={selectRegions}
         hoveredRegions={this.state.hoveredRegions}
-        showMRI={this.state.expanded >= 2}
+        showMRI={this.state.expandMode >= 2}
       >
       </MRIViewer>
     );
@@ -82,17 +66,16 @@ export default class EEGBrowser extends Component {
             signalSelectFilters={this.state.signalSelectFilters}
             selectedRegions={this.state.selected}
             onRemoveRegion={region => unselectRegions([region])}
+            unselectRegions={unselectRegions}
             setFilters={signalSelectFilters => this.setState({ signalSelectFilters })}
+            expandMode={this.state.expandMode}
+            setExpandMode={expandMode => this.setState({ expandMode })}
           >
           </SignalSelectionFilter>
         </div>
         <div className="eeg-browser-row">
-          {this.state.expanded > 0 ? regionSelect : null}
+          {this.state.expandMode > 0 ? regionSelect : null}
           {mriView}
-          <div className="expand-bars">
-            {expandBarLeft}
-            {expandBarRight}
-          </div>
           <SignalPlots
             selected={this.state.selected}
             signalSelectFilters={this.state.signalSelectFilters}

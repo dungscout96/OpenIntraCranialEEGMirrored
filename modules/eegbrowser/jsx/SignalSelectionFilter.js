@@ -136,11 +136,20 @@ export class SignalSelectionFilter extends Component {
     };
     const toggleFilters = (
       <div
-        style={{ width: '160px' }}
+        style={{ width: '180px' }}
         className="round-button"
         onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
       >
-        {this.state.showFilters ? 'Hide' : 'Show'} region filters
+        {this.state.showFilters ? 'Hide' : 'Show'} selected region tags
+      </div>
+    );
+    const removeAllRegions = (
+      <div
+        style={{ width: '160px' }}
+        className="round-button"
+        onClick={() => { this.props.unselectRegions(this.props.selectedRegions || []) }}
+      >
+        Clear region selections
       </div>
     );
     return (
@@ -152,14 +161,6 @@ export class SignalSelectionFilter extends Component {
         >
         </FormElement>
         <hr />
-        <div style={{ display: 'inline-block', width: '155px' }} className="round-button">
-          <a
-            href={`${window.loris.BaseURL}/document_repository`}
-            target="_blank"
-          >
-            Download Region Files
-          </a>
-        </div>
         <div
           style={{ display: 'inline-block', width: '240px' }}
           className={`round-button${this.props.selectedRegions.length === 0 ? ' disabled' : ''}`}
@@ -168,8 +169,35 @@ export class SignalSelectionFilter extends Component {
         >
           Download Selected Raw Signals
         </div>
+        <div style={{ display: 'inline-block', width: '155px' }} className="round-button">
+          <a
+            href={`${window.loris.BaseURL}/document_repository`}
+            target="_blank"
+          >
+            Download Region Files
+          </a>
+        </div>
         <hr />
-        {this.props.selectedRegions.length === 0 ? null : toggleFilters}
+        <div style={{ display: 'flex', flexDirection: 'row' }}>
+          <div
+            style={{ display: 'inline-block', width: '140px' }}
+            className="round-button"
+            onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
+          >
+            {this.props.expandMode === 0 ? 'Show region menu' : 'Full width plots' }
+          </div>
+          <div
+            style={{ display: 'inline-block', width: '140px' }}
+            className="round-button"
+            onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
+          >
+            {this.props.expandMode === 2 ? 'Hide' : 'Show'} MRI Viewer
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'row' }}>
+          {this.props.selectedRegions.length === 0 ? null : toggleFilters}
+          {this.props.selectedRegions.length === 0 ? null : removeAllRegions}
+        </div>
         {this.state.showFilters && filterContainer}
       </Panel>
     );
