@@ -63,6 +63,7 @@
         </div>
     </div>
     <br><br>
+<!-- ### Open iEEG - don't allow users to edit notifications 
     <h3>Notifications</h3>
     <table class="table table-instrument" >
         <thead>
@@ -80,6 +81,7 @@
             {/foreach}
         </tbody>
     </table>
+-->
     <div>
 
     </div>
