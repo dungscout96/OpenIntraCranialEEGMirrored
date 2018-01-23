@@ -136,8 +136,8 @@ export class SignalSelectionFilter extends Component {
     };
     const toggleFilters = (
       <div
-        style={{ width: '180px' }}
-        className="round-button"
+        style={{ width: '240px' }}
+        className={`round-button ${this.props.selectedRegions.length === 0 ? 'disabled' : ''}`}
         onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
       >
         {this.state.showFilters ? 'Hide' : 'Show'} selected region tags
@@ -145,8 +145,8 @@ export class SignalSelectionFilter extends Component {
     );
     const removeAllRegions = (
       <div
-        style={{ width: '160px' }}
-        className="round-button"
+        style={{ width: '240px' }}
+        className={`round-button ${this.props.selectedRegions.length === 0 ? 'disabled' : ''}`}
         onClick={() => { this.props.unselectRegions(this.props.selectedRegions || []) }}
       >
         Clear region selections
@@ -184,19 +184,20 @@ export class SignalSelectionFilter extends Component {
             className="round-button"
             onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
           >
-            {this.props.expandMode === 0 ? 'Show region menu' : 'Full width plots' }
+            {this.props.expandMode === 0 ? 'Show region menu' : 'Full width EEG traces' }
           </div>
           <div
             style={{ display: 'inline-block', width: '240px' }}
             className="round-button"
             onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
           >
-            {this.props.expandMode === 2 ? 'Hide' : 'Show'} Brain volume visualization
+            {this.props.expandMode === 2 ? 'Hide' : 'Show'} brain volume visualization
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'row' }}>
-          {this.props.selectedRegions.length === 0 ? null : toggleFilters}
-          {this.props.selectedRegions.length === 0 ? null : removeAllRegions}
+        <hr />
+        <div style={{ display: 'flex', flexDirection: 'row'  }}>
+          {toggleFilters}
+          {removeAllRegions}
         </div>
         {this.state.showFilters && filterContainer}
       </Panel>

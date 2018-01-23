@@ -1,3 +1,7 @@
+hr {
+ margin-top: 3px;
+}
+
 .domain {
   fill: none;
   stroke: black;
