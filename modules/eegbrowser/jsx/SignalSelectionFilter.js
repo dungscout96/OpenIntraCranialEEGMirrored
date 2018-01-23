@@ -169,7 +169,7 @@ export class SignalSelectionFilter extends Component {
         >
           Download Selected Raw Signals
         </div>
-        <div style={{ display: 'inline-block', width: '155px' }} className="round-button">
+        <div style={{ display: 'inline-block', width: '240px' }} className="round-button">
           <a
             href={`${window.loris.BaseURL}/document_repository`}
             target="_blank"
@@ -180,18 +180,18 @@ export class SignalSelectionFilter extends Component {
         <hr />
         <div style={{ display: 'flex', flexDirection: 'row' }}>
           <div
-            style={{ display: 'inline-block', width: '140px' }}
+            style={{ display: 'inline-block', width: '240px' }}
             className="round-button"
             onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
           >
             {this.props.expandMode === 0 ? 'Show region menu' : 'Full width plots' }
           </div>
           <div
-            style={{ display: 'inline-block', width: '140px' }}
+            style={{ display: 'inline-block', width: '240px' }}
             className="round-button"
             onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
           >
-            {this.props.expandMode === 2 ? 'Hide' : 'Show'} MRI Viewer
+            {this.props.expandMode === 2 ? 'Hide' : 'Show'} Brain volume visualization
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'row' }}>

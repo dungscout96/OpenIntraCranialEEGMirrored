@@ -1,7 +1,3 @@
-hr {
-  margin: 1px 1px;
-}
-
 .domain {
   fill: none;
   stroke: black;
@@ -30,21 +26,35 @@ hr {
 }
 
 .region-select {
+  display: flex;
+  flex-direction: column;
   flex: 0.8;
-  min-width: 170px;
+  min-width: 270px;
+  max-width: 300px;
 }
 
 .region-select-list {
-  margin-top: 10px;
   margin-left: 0;
-  padding: 5px 0;
-  flex: 1;
+  padding: 0 0;
+  flex: 0.5;
   list-style: none;
 }
 
 .region-select-item {
   cursor: pointer;
-  margin: 10px 0;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0;
+  max-height: 40px;
+}
+
+.region-select-item.--leaf {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .region-select-item:hover {
@@ -56,7 +66,7 @@ hr {
 }
 
 .region-color-code {
-  display: inline-block;
+  display: block;
 
   width: 10px;
   height: 10px;
@@ -122,8 +132,15 @@ hr {
 }
 
 .mri-view-container {
-  flex: 1;
+  flex: 2;
   align-items: center;
+  justify-content: center;
+  border-style: solid;
+  border-color: rgb(221, 221, 221);
+  border-width: 1px;
+  border-radius: 2px;
+  min-width: 450px;
+  padding: 4px 4px;
 }
 
 .signal-plots-container {
@@ -131,8 +148,9 @@ hr {
   display: flex;
 
   position: relative;
-  flex: 3;
+  flex: 1;
   flex-direction: column;
+  flex-basis: 10px
 }
 
 .toolbar {
@@ -142,6 +160,10 @@ hr {
   flex-direction: row;
   justify-content: center;
   margin-bottom: 5px;
+}
+
+.toolbar.toolbar-collapse {
+  flex-direction: column;
 }
 
 .toolbar-layer {
@@ -175,13 +197,22 @@ hr {
   flex-direction: row;
 }
 
+.mri-view-container div {
+  display: flex;
+  flex-direction: column;
+}
+
+.mri-view-container div canvas {
+  align-self: center;
+}
+
 .round-button {
   text-align: center;
   background-color: #064785;
   color: #fff;
   height: 30px;
   padding: 5px 5px;
-  margin: 15px 7px;
+  margin: 2px 2px;
   border-radius: 5px;
   cursor: pointer;
 
@@ -209,11 +240,11 @@ hr {
   display: flex;
 
   flex-direction: row;
-  justify-content: space-between;
+
 }
 
 .signal-filter-dropdown {
-  margin: 0 10px;
+  margin: 0 1px;
 }
 
 
@@ -234,11 +265,13 @@ hr {
   flex-direction: column;
   overflow: hidden;
   font-size: 0;
+  padding-bottom: 200px;
 }
 
 .signal-plots.padded-bottom {
   padding-bottom: 200px;
 }
+
 
 #page {
   overflow: hidden;

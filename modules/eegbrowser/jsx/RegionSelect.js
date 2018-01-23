@@ -18,7 +18,7 @@ export class RegionSelect extends Component {
       return (
         <li
           key={region.name}
-          className={`region-select-item ${selected ? 'selected-region' : 'unselected-region'}`}
+          className={`region-select-item --leaf ${selected ? 'selected-region' : 'unselected-region'}`}
           onClick={() => onclick(region)}
           onMouseEnter={() => { this.props.hoverRegions([region]); }}
           onMouseLeave={this.props.onMouseLeave}
@@ -98,7 +98,7 @@ export class RegionSelect extends Component {
     return (
       <div className="region-select">
         <div
-          style={{ maxWidth: '100px', visibility: showCollapseAll ? 'visible' : 'hidden' }}
+          style={{ marginTop: '0', marginBottom: '0', maxWidth: '100px', visibility: showCollapseAll ? 'visible' : 'hidden' }}
           className="round-button"
           onClick={() => this.setState({ expanded: {} })}
         >

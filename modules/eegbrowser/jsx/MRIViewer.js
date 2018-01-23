@@ -203,7 +203,7 @@ export class MRIViewer extends Component {
             ref={(div) => { this.container = div; }}>
           </div>
           <div className="mri-controls">
-              <h4>Hold R to rotate or T to translate the planes.</h4>
+              <h4>Hold R to rotate the planes.<br />Hold T to translate the planes.</h4>
           </div>
           <div className="mri-controls">
             <div
@@ -218,7 +218,7 @@ export class MRIViewer extends Component {
               className="round-button"
               onClick={() => { changeRot({ x: 0, y: 0, z: 0 }); changePos({ x: 0, y: 0, z: 0 }); }}
             >
-              Reset Orientation
+              Reset planes
             </div>
           </div>
         </div>
