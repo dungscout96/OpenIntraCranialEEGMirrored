@@ -13,7 +13,8 @@
   {if $success}
     <div class="success-message">
       <h1>Thank you!</h1>
-      <p>Your request for an account has been received successfully.</p>
+      <p>Your request for an account has been received.</p>
+      <p>You will receive your login credential by email once your account has been approved.</p>
       <a href="/" class="btn btn-primary btn-block">
         Return to Login Page
       </a>
@@ -21,7 +22,7 @@
   {else}
     <p class="text-center">
       Please fill in the form below to request a LORIS account.<br/>
-      We will contact you once your account has been approved.
+      You will be notified by email once your account has been approved.
     </p>
     <form action="/request-account/" method="POST"
           name="form1" id="form1">
@@ -46,6 +47,9 @@
           <b class="text-danger">{$error_message['from']}</b>
         </span>
       </div>
+
+<!--  ### Open iEEG : does not need Site, Examiner, Radiologist specified
+
       <div class="form-group">
         <select class="form-control" name="site" id="site">
           <option value="">Choose Site</option>
@@ -77,6 +81,7 @@
           /> Radiologist
         </label>
       </div>
+-->
       {if $captcha_key}
         {* Google reCaptcha *}
         <div class="form-group">
