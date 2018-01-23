@@ -74,12 +74,12 @@ class NDB_Menu_Filter_Document_Repository extends NDB_Menu_Filter
              //             'v.uploaded_by',
               //            'v.For_site',
               //            'v.comments',
-              //            'v.Data_dir',
+                          'v.Data_dir',
               //            'v.Date_uploaded',
                          );
 
         $openAccordion = $_GET['openAccordion'];
-        // $openAccordion = true; 
+        // $openAccordion = true;
         $this->tpl_data['openAccordion'] = $openAccordion;
         $filtered = $_GET['filtered'];
         $this->tpl_data['filtered'] = $filtered;
