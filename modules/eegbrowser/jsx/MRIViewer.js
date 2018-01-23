@@ -56,8 +56,8 @@ export class MRIViewer extends Component {
   componentWillReceiveProps(newProps) {
     if (!this.initialized && !this.props.showMRI && newProps.showMRI) {
       this.initialized = true;
-      const width = 300;
-      const height = 250;
+      const width = 350;
+      const height = 350;
       const renderer = new THREE.WebGLRenderer();
       renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0, 1.0));
       const self = this;
