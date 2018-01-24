@@ -136,7 +136,7 @@ export class SignalSelectionFilter extends Component {
     };
     const toggleFilters = (
       <div
-        style={{ width: '240px' }}
+        style={{ display: 'inline-block', width: '240px' }}
         className={`round-button ${this.props.selectedRegions.length === 0 ? 'disabled' : ''}`}
         onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
       >
@@ -145,7 +145,7 @@ export class SignalSelectionFilter extends Component {
     );
     const removeAllRegions = (
       <div
-        style={{ width: '240px' }}
+        style={{ display: 'inline-block', width: '240px' }}
         className={`round-button ${this.props.selectedRegions.length === 0 ? 'disabled' : ''}`}
         onClick={() => { this.props.unselectRegions(this.props.selectedRegions || []) }}
       >
@@ -178,27 +178,23 @@ export class SignalSelectionFilter extends Component {
           </a>
         </div>
         <hr />
-        <div style={{ display: 'flex', flexDirection: 'row' }}>
-          <div
-            style={{ display: 'inline-block', width: '240px' }}
-            className="round-button"
-            onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
-          >
-            {this.props.expandMode === 0 ? 'Show region menu' : 'Full width EEG traces' }
-          </div>
-          <div
-            style={{ display: 'inline-block', width: '240px' }}
-            className="round-button"
-            onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
-          >
-            {this.props.expandMode === 2 ? 'Hide' : 'Show'} brain volume visualization
-          </div>
+        <div
+          style={{ display: 'inline-block', width: '240px' }}
+          className="round-button"
+          onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
+        >
+          {this.props.expandMode === 0 ? 'Show region menu' : 'Full width EEG traces' }
+        </div>
+        <div
+          style={{ display: 'inline-block', width: '240px' }}
+          className="round-button"
+          onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
+        >
+          {this.props.expandMode === 2 ? 'Hide' : 'Show'} brain volume visualization
         </div>
         <hr />
-        <div style={{ display: 'flex', flexDirection: 'row'  }}>
-          {toggleFilters}
-          {removeAllRegions}
-        </div>
+        {toggleFilters}
+        {removeAllRegions}
         {this.state.showFilters && filterContainer}
       </Panel>
     );

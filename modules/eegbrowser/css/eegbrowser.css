@@ -140,11 +140,14 @@ hr {
   align-items: center;
   justify-content: center;
   border-style: solid;
+  padding: 4px 4px;
+}
+
+.mri-view-container {
   border-color: rgb(221, 221, 221);
   border-width: 1px;
   border-radius: 2px;
   min-width: 450px;
-  padding: 4px 4px;
 }
 
 .signal-plots-container {

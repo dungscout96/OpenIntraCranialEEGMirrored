@@ -39,8 +39,9 @@ export class SignalPlots extends Component {
     this.resizeUpdate && this.resizeUpdate();
   }
   componentDidMount() {
+    const toolbars = document.querySelectorAll('.toolbar');
     this.resizeUpdate = () => {
-      document.querySelectorAll('.toolbar').forEach(e => {
+      toolbars.forEach(e => {
         const { width } = e.getBoundingClientRect();
         if (width < 782) {
           e.className = "toolbar toolbar-collapse";
@@ -48,6 +49,9 @@ export class SignalPlots extends Component {
           e.className = "toolbar";
         }
       });
+      const { left, width } = this.container.getBoundingClientRect();
+      const bodyWidth = document.body.getBoundingClientRect().width;
+      document.body.style.width = `${Math.max(left + width, window.innerWidth-15)}px`
       this.forceUpdate();
     };
     window.addEventListener('resize', this.resizeUpdate);
@@ -207,7 +211,13 @@ export class SignalPlots extends Component {
       maxPlot = Math.min(minPlot + PLOTS_PER_GROUP, numChannels) - 1;
     }
     const plotElements = this.generatePlotElements(filtered, minPlot, maxPlot);
-    const showingPlots = `Showing plots: ${minPlot + 1} to ${maxPlot + 1} out of ${numChannels}.`;
+    const showingPlots = (
+      <h6>
+        Showing traces: {minPlot + 1} to {maxPlot + 1} out of {numChannels}.
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        Shift + mouse scroll to zoom time scale. Shift + mouse drag to move along time axis.
+      </h6>
+    );
     const noPlotsScreen = (
       <div className="no-plots-screen">
         <h4>Select a region or lobe to display signals.</h4>
@@ -283,7 +293,7 @@ export class SignalPlots extends Component {
     );
     return (
       <div className="signal-plots-container">
-        <h5>{numChannels > 0 ? showingPlots : null} Use shift + scroll to scale the time interval. Use shift + mouse drag to slide the time interval.</h5>
+        {numChannels > 0 ? showingPlots : null}
         <div className="toolbar">
           <div className="toolbar-layer">
             <div className="toolbar-hor-group">
