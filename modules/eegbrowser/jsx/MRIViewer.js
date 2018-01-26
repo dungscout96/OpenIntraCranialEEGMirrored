@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import MRILoader from './MRILoader';
+import { PlaneShifter } from './PlaneShifter'
 
 /* eslint-disable no-undef, react/jsx-no-undef */
 
@@ -87,7 +88,7 @@ export class MRIViewer extends Component {
       this.mriLoader = new MRILoader(this.scene);
       this.meshes = [];
       this.mriLoader.initialize().then(() => {
-        this.planeShifter = new PlaneShifter.PlaneShifter(
+        this.planeShifter = new PlaneShifter(
           this.mriLoader.system,
           this.camera,
           { controls: this.camControls, mouse:this.mouse }
@@ -204,7 +205,7 @@ export class MRIViewer extends Component {
             ref={(div) => { this.container = div; }}>
           </div>
           <div className="mri-controls">
-              <h6>Hold R to rotate planes. Hold T to translate planes.</h6>
+              <h6>While dragging with the mouse, hold R to rotate planes and hold T to translate planes.</h6>
           </div>
           <div className="mri-controls">
             <div

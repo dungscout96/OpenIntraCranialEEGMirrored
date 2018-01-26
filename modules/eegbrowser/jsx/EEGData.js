@@ -1,5 +1,5 @@
 import { FILTERS } from './Filters';
-import { fetch } from './fetch';
+import { fetch } from './fetchWrapper';
 
 /* eslint-disable no-undef */
 
@@ -23,7 +23,7 @@ export class Channel {
         const reader = new FileReader();
         reader.readAsArrayBuffer(blob);
         return new Promise(resolve => {
-          reader.addEventListener('loadend', (e) => resolve(e.srcElement.result));
+          reader.addEventListener('loadend', (e) => resolve((e.srcElement || e.target).result));
         });
       })
       .then(buffer => {

@@ -4,7 +4,7 @@ import { RegionSelect,  } from './RegionSelect';
 import { MRIViewer } from './MRIViewer';
 import { SignalSelectionFilter } from './SignalSelectionFilter';
 import { SignalPlots } from './SignalPlots';
-import { fetch } from './fetch';
+import { fetch } from './fetchWrapper';
 
 import { getLeafRegions, instantiateRegions } from './EEGData';
 
@@ -21,12 +21,17 @@ export default class EEGBrowser extends Component {
       expandMode: 1
     };
   }
+  componentDidMount() {
+    window.flexibility(document.documentElement);
+  }
   render() {
+    const leaves = getLeafRegions(this.state.brain);
     const selectRegions = (regions) => {
-      this.setState({
-        selected: this.state.selected
+      const selected = this.state.selected
           .filter(r => !regions.includes(r))
-          .concat(regions)
+          .concat(regions);
+      this.setState({
+        selected: leaves.filter(region => selected.includes(region))
       });
     };
     const unselectRegions = (regions) => {
@@ -46,7 +51,6 @@ export default class EEGBrowser extends Component {
       >
       </RegionSelect>
     );
-    const leaves = getLeafRegions(this.state.brain);
     const mriView = (
       <MRIViewer
         regions={leaves}

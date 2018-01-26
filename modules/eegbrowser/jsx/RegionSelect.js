@@ -94,7 +94,7 @@ export class RegionSelect extends Component {
       }
     };
     const lobeKeys = Object.keys(this.state.expanded);
-    const showCollapseAll = lobeKeys.length > 0 && lobeKeys.every(k => this.state.expanded[k]);
+    const showCollapseAll = lobeKeys.length > 0 && lobeKeys.some(k => this.state.expanded[k]);
     return (
       <div className="region-select">
         <div

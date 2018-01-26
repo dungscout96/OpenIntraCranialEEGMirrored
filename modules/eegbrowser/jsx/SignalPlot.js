@@ -6,7 +6,7 @@ const STATS_TOP_OFFSET = 27;
 const drawSignalLine = (ctx, tScale, yScale, channel, indexes) => {
   const startx = tScale(channel.domain[indexes[0]]);
   const starty = yScale(channel.signal[indexes[0]]);
-  ctx.strokeStyle = '#004881';
+  ctx.strokeStyle = '#000';
   ctx.lineWidth = 0.4;
   ctx.moveTo(startx, starty);
   ctx.beginPath();
@@ -221,13 +221,13 @@ export class SignalPlot extends Component {
     if (this.props.cursorT) {
       const cursorPos = t(this.props.cursorT);
       if (0 <= cursorPos && cursorPos <= width) {
-        const cursText = this.props.showTimeOnCursor ? this.props.xAxisLabel + ' ' + cursTime + ' | ' : ' ';
+        const cursText = this.props.showTimeOnCursor ? `${cursTime} ${this.props.xAxisLabel} | ` : ' ';
         this.plot.cursorTick = drawCursorTick(g, height, cursorPos);
         this.plot.cursorStats = g.append('text')
           .attr('x', cursorPos)
           .attr('y', STATS_TOP_OFFSET)
           .attr('font-size', CURSOR_FONT_SIZE)
-          .text(`${cursText}value (${this.props.yAxisLabel}): ${cursVal}`);
+          .text(`${cursText} ${cursVal} ${this.props.yAxisLabel}`);
       }
     }
     if (this.plot.xAx) {
@@ -318,13 +318,13 @@ export class SignalPlot extends Component {
     if (this.props.cursorT) {
       const cursorPos = t(this.props.cursorT);
       if (0 >= cursorPos && cursorPos <= width) {
-        const cursText = this.props.showTimeOnCursor ? this.props.xAxisLabel + ' ' + cursTime + ' | ' : ' ';
+        const cursText = this.props.showTimeOnCursor ? `${cursTime} ${this.props.xAxisLabel} | ` : ' ';
         cursorTick = drawCursorTick(g, height, cursorPos);
         cursorStats = g.append('text')
          .attr('x', cursorPos)
          .attr('y', STATS_TOP_OFFSET)
          .attr('font-size', CURSOR_FONT_SIZE)
-         .text(`${cursText}value (${this.props.yAxisLabel}): ${cursVal}`);
+         .text(`${cursText} ${cursVal} ${this.props.yAxisLabel}`);
       }
     }
     let xAx = null;

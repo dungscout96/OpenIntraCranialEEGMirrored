@@ -1,8 +1,8 @@
 import React, { Component } from 'react';
 import { SignalPlot } from './SignalPlot';
 import { SignalProcessingSelect } from './SignalProcessingSelect';
-import { fetch } from './fetch';
 import { filterChannels } from './EEGData';
+import ResizeObserver from './ResizeObserver'
 
 /* eslint-disable no-undef, react/jsx-no-undef */
 
@@ -36,11 +36,12 @@ export class SignalPlots extends Component {
     const numChannels = filterChannels(nextProps.signalSelectFilters, nextProps.selected).length;
     const newGroup = minPlot > numChannels ? Math.floor(numChannels / PLOTS_PER_GROUP) : this.state.group;
     this.setState({ group : newGroup });
-    this.resizeUpdate && this.resizeUpdate();
   }
   componentDidMount() {
     const toolbars = document.querySelectorAll('.toolbar');
     this.resizeUpdate = () => {
+      const { left, width } = this.container.getBoundingClientRect();
+      document.body.style.width = `${Math.max(left + 600, window.innerWidth-15)}px`
       toolbars.forEach(e => {
         const { width } = e.getBoundingClientRect();
         if (width < 782) {
@@ -49,17 +50,15 @@ export class SignalPlots extends Component {
           e.className = "toolbar";
         }
       });
-      const { left, width } = this.container.getBoundingClientRect();
-      const bodyWidth = document.body.getBoundingClientRect().width;
-      document.body.style.width = `${Math.max(left + width, window.innerWidth-15)}px`
-      this.forceUpdate();
     };
+    this.resizeObserver = new ResizeObserver(this.resizeUpdate);
+    this.resizeObserver.observe(this.container);
     window.addEventListener('resize', this.resizeUpdate);
     // If user mouses up anywhere in the browser window stop translating time interval.
     window.addEventListener('mouseup', () => { this.lastMouseX = null; });
   }
   componentWillUnmount() {
-    window.removeEveEventListener('resize', this.resizeUpdate);
+    window.remove('resize', this.resizeUpdate);
   }
   generatePlotElements(channels, minPlot, maxPlot) {
     const plotElements = [];
@@ -69,7 +68,7 @@ export class SignalPlots extends Component {
       channel.applyFilter(low, hi, () => this.forceUpdate());
       const axisProps = {
         drawXAxis: false,
-        xAxisLabel: 'time (sec)',
+        xAxisLabel: 'sec',
         yAxisLabel: 'uV',
       };
       let showTimeOnCursor = false;
@@ -113,7 +112,7 @@ export class SignalPlots extends Component {
             yBounds={{ ymin, ymax }}
             onPlus={(e) => { e.stopPropagation(); zoom(e.button === 0, 0.9); }}
             onMinus={(e) => { e.stopPropagation(); zoom(e.button === 0, 1.1); }}
-            backgroundColor={index % 2 === 0 ? '#fff' : '#eee'}
+            backgroundColor={'#fff'}
             cursorT={this.state.cursorT}
             drawXAxis={axisProps.drawXAxis}
             xAxisOrientation={axisProps.xAxisOrientation}
