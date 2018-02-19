@@ -9,7 +9,7 @@ const ZIP_URL = `${window.loris.BaseURL}/${window.loris.TestName}/ajax/GetChanne
 export class SignalSelectionFilter extends Component {
   constructor(props) {
     super(props);
-    this.state = { showFilters: false, hemisphere: 'Both', oneCPPPR: 'false', electrodeType: [] };
+    this.state = { showFilters: true, hemisphere: 'Both', oneCPPPR: 'false', electrodeType: [] };
     this.setDropdown = this.setDropdown.bind(this);
   }
   componentWillMount() {
