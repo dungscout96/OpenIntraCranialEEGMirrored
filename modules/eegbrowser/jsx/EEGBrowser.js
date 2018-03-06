@@ -63,6 +63,22 @@ export default class EEGBrowser extends Component {
       >
       </MRIViewer>
     );
+    const expandBarLeft = this.state.expandMode <= 0 ? null : (
+      <div
+        className="expand-bar"
+        onClick={() => this.setState({ expandMode: Math.max(this.state.expandMode - 1, 0) })}
+      >
+        <span className="expand-bar-icon">{'<'}</span>
+      </div>
+    );
+    const expandBarRight = this.state.expandMode >= 2 ? null : (
+      <div
+        className="expand-bar"
+        onClick={() => this.setState({ expandMode: Math.min(this.state.expandMode + 1, 2) })}
+      >
+        <span className="expand-bar-icon">{'>'}</span>
+      </div>
+    );
     return (
       <div className="eeg-browser">
         <div className="eeg-browser-row">
@@ -80,6 +96,10 @@ export default class EEGBrowser extends Component {
         <div className="eeg-browser-row">
           {this.state.expandMode > 0 ? regionSelect : null}
           {mriView}
+          <div className="expand-bars">
+            {expandBarLeft}
+            {expandBarRight}
+          </div>
           <SignalPlots
             selected={this.state.selected}
             signalSelectFilters={this.state.signalSelectFilters}
