@@ -80,27 +80,7 @@ export const FRAGMENT = (nbTextures, numMRIs) => `
   {
 
     float skipped = 0.0;
-    for (int i = 0; i < ${nbTextures}; i++)
-    {
-      if (i >= textureOffset && i < textureOffset + nbTexturesUsed)
-      {
-        float bufferSize = floor(textureSize[i].x * textureSize[i].y);
-        if (outOfBounds(voxelPos, vec3(0.0, 0.0, 0.0), dimensions))
-        {
-          skipped += bufferSize;
-          continue;
-        }
-        float offset = floor(dot(voxelPos, stride));
-        offset += timeIndex * timeStride;
-        offset -= skipped;
-        vec2 tex;
-        tex.x = mod(offset, textureSize[i].x) + 0.5;
-        tex.y = floor(offset / textureSize[i].x) + 0.5;
-        tex = tex / textureSize[i];
-        vec4 color = texture2D(textures[i], tex);
-        return color.r;
-      }
-    }
+${loopIntensityWorldNearest(0, nbTextures)}
     return -1.0;
   }
   const float EPSILON = 0.06;
@@ -109,39 +89,7 @@ export const FRAGMENT = (nbTextures, numMRIs) => `
   void getIntensityWorld(inout vec4 colors[${numMRIs}], vec4 worldCoord)
   {
     float maxIntensity = -1.0;
-    for (int i = 0; i < ${numMRIs}; i++)
-    {
-      vec3 voxelPos = swapMat[i] * (w2v[i] * worldCoord).xyz;
-      voxelPos = floor(voxelPos);
-      float intensity = getIntensityWorldNearest(
-        voxelPos,
-        dimensions[i],
-        stride[i],
-        timeIndex[i],
-        timeStride[i],
-        textureOffsets[i],
-        nbTexturesUsed[i]
-      );
-      if (intensity > maxIntensity) {
-        maxIntensity = intensity;
-      }
-      if (enableConstrast)
-      {
-        intensity = texture2D(contrastTexture, vec2(intensity, 0.5)).r;
-      }
-      if (enableColorMap[i] == 1 && intensity >= EPSILON)
-      {
-        colors[i].rgb = texture2D(colorMap[i], vec2(intensity, 0.5)).rgb;
-        colors[i].a = 1.0;
-      } else {
-        colors[i] = vec4(intensity, intensity, intensity, 1.0);
-      }
-      if (brightness >= 0.0)
-      {
-        colors[i].rgb = clamp(colors[i].rgb * brightness, 0.0, 1.0);
-      }
-      colors[i] *= weight[i];
-    }
+${loopIntensityWorld(0, numMRIs)}
     if (maxIntensity < 0.0) {
       discard;
     }
@@ -160,10 +108,86 @@ export const FRAGMENT = (nbTextures, numMRIs) => `
     getIntensityWorld(colors, worldCoord);
 
     gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-    for (int i = 0; i < ${numMRIs}; i++)
-    {
-      gl_FragColor += colors[i];
-    }
+${loopIfsFragColor(0, numMRIs)}
     gl_FragColor  = clamp(gl_FragColor, 0.0, 1.0);
   }
 `;
+
+function loopIfsFragColor(min, max) {
+  let code = '';
+  for(let i = min; i < max; i++) {
+    code += `
+    {
+      gl_FragColor += colors[${i}];
+    }
+    `;
+  }
+  return code;
+}
+
+function loopIntensityWorld(min, max) {
+  let code = '';
+  for(let i = min; i < max; i++) {
+    code += `
+      {
+        vec3 voxelPos = swapMat[${i}] * (w2v[${i}] * worldCoord).xyz;
+        voxelPos = floor(voxelPos);
+        float intensity = getIntensityWorldNearest(
+          voxelPos,
+          dimensions[${i}],
+          stride[${i}],
+          timeIndex[${i}],
+          timeStride[${i}],
+          textureOffsets[${i}],
+          nbTexturesUsed[${i}]
+        );
+        if (intensity > maxIntensity) {
+          maxIntensity = intensity;
+        }
+        colors[${i}].rgb = texture2D(colorMap[${i}], vec2(intensity, 0.5)).rgb;
+        if (!(enableColorMap[${i}] == 1 && intensity >= EPSILON))
+        {
+          colors[${i}] = vec4(intensity, intensity, intensity, 1.0);
+        } else {
+          colors[${i}].a = 1.0;
+        }
+        if (brightness >= 0.0)
+        {
+          colors[${i}].rgb = clamp(colors[${i}].rgb * brightness, 0.0, 1.0);
+        }
+        colors[${i}] *= weight[${i}];
+      }
+    `;
+  }
+  return code;
+}
+
+function loopIntensityWorldNearest(min, max) {
+  let code = '';
+  for(let i = min; i < max; i++) {
+    code += `
+      {
+        if (${i} >= textureOffset && ${i} < textureOffset + nbTexturesUsed)
+        {
+          float bufferSize = floor(textureSize[${i}].x * textureSize[${i}].y);
+          if (outOfBounds(voxelPos, vec3(0.0, 0.0, 0.0), dimensions))
+          {
+            skipped += bufferSize;
+          }
+          float offset = floor(dot(voxelPos, stride));
+          offset += timeIndex * timeStride;
+          offset -= skipped;
+          vec2 tex;
+          tex.x = mod(offset, textureSize[${i}].x) + 0.5;
+          tex.y = floor(offset / textureSize[${i}].x) + 0.5;
+          tex = tex / textureSize[${i}];
+          vec4 color = texture2D(textures[${i}], tex);
+          if (!(outOfBounds(voxelPos, vec3(0.0, 0.0, 0.0), dimensions))) {
+            return color.r;
+          }
+        }
+      }
+    `;
+  }
+  return code;
+}

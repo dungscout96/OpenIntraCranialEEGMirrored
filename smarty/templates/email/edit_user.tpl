@@ -1,12 +1,16 @@
-Subject: Account Changes - {$study}
+Subject: Account Request - {$study}
 
 {$realname},
 
-Your account details have changed:
+Thank you for your account request for the {$study}. 
+
+Your account has been activated. 
+
+Please visit: {$url} 
+to log in with the following credential: 
+
 User name: {$username}
 Password:  {$password}
-
-You may log in at {$url}.
 
 You will be prompted to change your password after logging in.
 

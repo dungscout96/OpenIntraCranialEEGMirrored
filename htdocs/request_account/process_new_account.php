@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
 // ### Open iEEG will specify default values for Site, Examiner, Radiologist 
  
-/* ###
+/* 
         if ($_REQUEST['examiner']=='on') {
             $rad = 0;
             if ($_REQUEST['radiologist']=='on') {
@@ -255,7 +255,6 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                     )
                 );
 
-//print "JUST INSERTED examinerID $examinerID "; 
             }
 // ###         }
 

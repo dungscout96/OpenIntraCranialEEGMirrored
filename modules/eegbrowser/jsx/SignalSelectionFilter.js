@@ -9,7 +9,7 @@ const ZIP_URL = `${window.loris.BaseURL}/${window.loris.TestName}/ajax/GetChanne
 export class SignalSelectionFilter extends Component {
   constructor(props) {
     super(props);
-    this.state = { showFilters: false, hemisphere: 'Both', oneCPPPR: 'false', electrodeType: [] };
+    this.state = { showFilters: true, hemisphere: 'Both', oneCPPPR: 'false', electrodeType: [] };
     this.setDropdown = this.setDropdown.bind(this);
   }
   componentWillMount() {
@@ -136,8 +136,8 @@ export class SignalSelectionFilter extends Component {
     };
     const toggleFilters = (
       <div
-        style={{ width: '180px' }}
-        className="round-button"
+        style={{ display: 'inline-block', width: '240px' }}
+        className={`round-button ${this.props.selectedRegions.length === 0 ? 'disabled' : ''}`}
         onClick={() => { this.setState({ showFilters: !this.state.showFilters }) }}
       >
         {this.state.showFilters ? 'Hide' : 'Show'} selected region tags
@@ -145,8 +145,8 @@ export class SignalSelectionFilter extends Component {
     );
     const removeAllRegions = (
       <div
-        style={{ width: '160px' }}
-        className="round-button"
+        style={{ display: 'inline-block', width: '240px' }}
+        className={`round-button ${this.props.selectedRegions.length === 0 ? 'disabled' : ''}`}
         onClick={() => { this.props.unselectRegions(this.props.selectedRegions || []) }}
       >
         Clear region selections
@@ -169,7 +169,7 @@ export class SignalSelectionFilter extends Component {
         >
           Download Selected Raw Signals
         </div>
-        <div style={{ display: 'inline-block', width: '155px' }} className="round-button">
+        <div style={{ display: 'inline-block', width: '240px' }} className="round-button">
           <a
             href={`${window.loris.BaseURL}/document_repository`}
             target="_blank"
@@ -178,26 +178,23 @@ export class SignalSelectionFilter extends Component {
           </a>
         </div>
         <hr />
-        <div style={{ display: 'flex', flexDirection: 'row' }}>
-          <div
-            style={{ display: 'inline-block', width: '140px' }}
-            className="round-button"
-            onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
-          >
-            {this.props.expandMode === 0 ? 'Show region menu' : 'Full width plots' }
-          </div>
-          <div
-            style={{ display: 'inline-block', width: '140px' }}
-            className="round-button"
-            onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
-          >
-            {this.props.expandMode === 2 ? 'Hide' : 'Show'} MRI Viewer
-          </div>
+        <div
+          style={{ display: 'inline-block', width: '240px' }}
+          className="round-button"
+          onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
+        >
+          {this.props.expandMode === 0 ? 'Show region menu' : 'Full width EEG traces' }
         </div>
-        <div style={{ display: 'flex', flexDirection: 'row' }}>
-          {this.props.selectedRegions.length === 0 ? null : toggleFilters}
-          {this.props.selectedRegions.length === 0 ? null : removeAllRegions}
+        <div
+          style={{ display: 'inline-block', width: '240px' }}
+          className="round-button"
+          onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
+        >
+          {this.props.expandMode === 2 ? 'Hide' : 'Show'} brain volume visualization
         </div>
+        <hr />
+        {toggleFilters}
+        {removeAllRegions}
         {this.state.showFilters && filterContainer}
       </Panel>
     );

@@ -1,8 +1,8 @@
 import React, { Component } from 'react';
 import { SignalPlot } from './SignalPlot';
 import { SignalProcessingSelect } from './SignalProcessingSelect';
-import { fetch } from './fetch';
 import { filterChannels } from './EEGData';
+import ResizeObserver from './ResizeObserver'
 
 /* eslint-disable no-undef, react/jsx-no-undef */
 
@@ -38,13 +38,27 @@ export class SignalPlots extends Component {
     this.setState({ group : newGroup });
   }
   componentDidMount() {
-    this.resizeUpdate = () => { this.forceUpdate(); };
+    const toolbars = document.querySelectorAll('.toolbar');
+    this.resizeUpdate = () => {
+      const { left, width } = this.container.getBoundingClientRect();
+      document.body.style.width = `${Math.max(left + 600, window.innerWidth-15)}px`
+      toolbars.forEach(e => {
+        const { width } = e.getBoundingClientRect();
+        if (width < 782) {
+          e.className = "toolbar toolbar-collapse";
+        } else {
+          e.className = "toolbar";
+        }
+      });
+    };
+    this.resizeObserver = new ResizeObserver(this.resizeUpdate);
+    this.resizeObserver.observe(this.container);
     window.addEventListener('resize', this.resizeUpdate);
     // If user mouses up anywhere in the browser window stop translating time interval.
     window.addEventListener('mouseup', () => { this.lastMouseX = null; });
   }
   componentWillUnmount() {
-    window.removeEveEventListener('resize', this.resizeUpdate);
+    window.remove('resize', this.resizeUpdate);
   }
   generatePlotElements(channels, minPlot, maxPlot) {
     const plotElements = [];
@@ -54,10 +68,12 @@ export class SignalPlots extends Component {
       channel.applyFilter(low, hi, () => this.forceUpdate());
       const axisProps = {
         drawXAxis: false,
-        xAxisLabel: 'time (sec)',
+        xAxisLabel: 'sec',
         yAxisLabel: 'uV',
       };
+      let showTimeOnCursor = false;
       if (index === minPlot) {
+        showTimeOnCursor = true;
         axisProps.drawXAxis = true;
         axisProps.xAxisOrientation = 'top';
         axisProps.xAxisLabelPos = null;
@@ -96,7 +112,7 @@ export class SignalPlots extends Component {
             yBounds={{ ymin, ymax }}
             onPlus={(e) => { e.stopPropagation(); zoom(e.button === 0, 0.9); }}
             onMinus={(e) => { e.stopPropagation(); zoom(e.button === 0, 1.1); }}
-            backgroundColor={index % 2 === 0 ? '#fff' : '#eee'}
+            backgroundColor={'#fff'}
             cursorT={this.state.cursorT}
             drawXAxis={axisProps.drawXAxis}
             xAxisOrientation={axisProps.xAxisOrientation}
@@ -104,6 +120,7 @@ export class SignalPlots extends Component {
             xAxisLabelPos={axisProps.xAxisLabelPos}
             yAxisLabel={axisProps.yAxisLabel}
             yAxisLabelPos={axisProps.yAxisLabelPos}
+            showTimeOnCursor={showTimeOnCursor}
           />
         );
       }
@@ -171,7 +188,7 @@ export class SignalPlots extends Component {
     };
     const enabled = (text, incr) => (
       <div
-        style={{ width: '85px' }}
+        style={{ width: '130px' }}
         className="round-button"
         onClick={() => { this.setState({ group: this.state.group + incr }); }}
       >
@@ -179,7 +196,7 @@ export class SignalPlots extends Component {
       </div>
     );
     const disabled = text => (
-      <div style={{ width: '85px' }} className="round-button disabled">
+      <div style={{ width: '130px' }} className="round-button disabled">
         {text}
       </div>
     );
@@ -194,14 +211,15 @@ export class SignalPlots extends Component {
     }
     const plotElements = this.generatePlotElements(filtered, minPlot, maxPlot);
     const showingPlots = (
-      <div className="signal-plots-group-number">
-        Showing plots: {minPlot + 1} to {maxPlot + 1} out of {numChannels}
-      </div>
+      <h6>
+        Showing traces: {minPlot + 1} to {maxPlot + 1} out of {numChannels}.
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        Shift + mouse scroll to zoom time scale. Shift + mouse drag to move along time axis.
+      </h6>
     );
     const noPlotsScreen = (
       <div className="no-plots-screen">
         <h4>Select a region or lobe to display signals.</h4>
-        <h4>Change the time scale with Shift + mouse drag/scroll.</h4>
       </div>
     );
     const zoomAll = (leftClick, multiplier) => {
@@ -224,14 +242,19 @@ export class SignalPlots extends Component {
         const interval = Math.abs(tmax - tmin);
         tmin += interval * direction;
         tmax += interval * direction;
+        tmax = Math.min(Math.max(tmax, interval), 70);
+        tmin = tmax - interval;
         this.setState({ tBounds: { tmin, tmax } });
       }
     };
     const updateTime = (leftClick, increment) => {
       if (leftClick) {
         let { tmin, tmax } = this.state.tBounds;
+        const interval = Math.abs(tmax - tmin);
         tmin += increment;
         tmax += increment;
+        tmax = Math.min(Math.max(tmax, interval - 10), 70);
+        tmin = tmax - interval;
         this.setState({ tBounds: { tmin, tmax } });
       }
     };
@@ -305,13 +328,13 @@ export class SignalPlots extends Component {
           </div>
           <div className="toolbar-layer">
             <div className="toolbar-hor-group">
-              {showPrev ? enabled('<<Previous', -1) : disabled('<<Previous')}
-              {showNext ? enabled('Next>>', +1) : disabled('Next>>')}
+              {showPrev ? enabled('Previous Channels', -1) : disabled('Previous Channels')}
+              {showNext ? enabled('Next Channels', +1) : disabled('Next Channels')}
             </div>
           </div>
         </div>
         <div
-          className={`signal-plots${plotElements.length === 0 ? ' padded-buttom' : ''}`}
+          className={`signal-plots${plotElements.length === 0 ? ' padded-bottom' : ''}`}
           ref={(container) => { this.container = container; }}
           onWheel={(e) => { if (e.shiftKey) { e.preventDefault(); onWheel(e.deltaY); } }}
           onMouseMove={(e) => { onMouseMove(e.shiftKey, e.buttons > 0 && e.button === 0, e.clientX); }}

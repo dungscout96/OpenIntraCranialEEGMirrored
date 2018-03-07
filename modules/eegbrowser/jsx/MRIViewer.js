@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import MRILoader from './MRILoader';
+import { PlaneShifter } from './PlaneShifter'
 
 /* eslint-disable no-undef, react/jsx-no-undef */
 
@@ -56,8 +57,8 @@ export class MRIViewer extends Component {
   componentWillReceiveProps(newProps) {
     if (!this.initialized && !this.props.showMRI && newProps.showMRI) {
       this.initialized = true;
-      const width = 300;
-      const height = 250;
+      const width = 440;
+      const height = 440;
       const renderer = new THREE.WebGLRenderer();
       renderer.setClearColor(new THREE.Color(1.0, 1.0, 1.0, 1.0));
       const self = this;
@@ -87,7 +88,7 @@ export class MRIViewer extends Component {
       this.mriLoader = new MRILoader(this.scene);
       this.meshes = [];
       this.mriLoader.initialize().then(() => {
-        this.planeShifter = new PlaneShifter.PlaneShifter(
+        this.planeShifter = new PlaneShifter(
           this.mriLoader.system,
           this.camera,
           { controls: this.camControls, mouse:this.mouse }
@@ -113,7 +114,7 @@ export class MRIViewer extends Component {
         const { x, y, z } = dimensions;
         const scale = Math.min(x, y, z) / 2;
         const diagonal = dimensions.length();
-        this.camera.position.z = diagonal;
+        this.camera.position.z = diagonal / 1.5;
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
         const material = new THREE.MeshBasicMaterial({ color: GRAY });
         const geometry = new THREE.SphereBufferGeometry(MESH_SIZE * scale, 8, 8);
@@ -199,14 +200,16 @@ export class MRIViewer extends Component {
       return (
         <div className="mri-view-container">
           <div
+            className="mri-view-canvas-container"
             onMouseDown={this.selectRegionAtMouse}
             ref={(div) => { this.container = div; }}>
           </div>
           <div className="mri-controls">
-              <h4>Hold R to rotate or T to translate the planes.</h4>
+              <h6>While dragging with the mouse, hold R to rotate planes and hold T to translate planes.</h6>
           </div>
           <div className="mri-controls">
             <div
+              style={{ width: '150px', alignSelf: 'center'}}
               className="round-button"
               onClick={() => { this.setState({ showElectrodes: !this.state.showElectrodes }) }}
             >
@@ -215,10 +218,11 @@ export class MRIViewer extends Component {
           </div>
           <div className="mri-controls">
             <div
+              style={{ width: '150px', alignSelf: 'center'}}
               className="round-button"
               onClick={() => { changeRot({ x: 0, y: 0, z: 0 }); changePos({ x: 0, y: 0, z: 0 }); }}
             >
-              Reset Orientation
+              Reset planes
             </div>
           </div>
         </div>
