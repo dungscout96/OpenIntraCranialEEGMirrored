@@ -3,7 +3,8 @@
     <section class="col-md-4 col-md-push-8">
       <div class="panel panel-default login-panel">
         <div class="panel-heading">
-          <h3 class="panel-title">Login to LORIS</h3>
+          <h3 class="panel-title">Login</h3>
+          <!-- ### h3 class="panel-title">Login to LORIS</h3-->
         </div>
         <div class="panel-body">
           {if $study_logo}
@@ -32,7 +33,7 @@
             <a href="{$baseurl}/request-account/">Request Account</a>
           </div>
           <div class="help-text">
-            A WebGL-compatible browser is required for full functionality (Mozilla Firefox, Google Chrome)
+            Please use a recent version of Chrome or Firefox for full functionality.
           </div>
         </div>
       </div>

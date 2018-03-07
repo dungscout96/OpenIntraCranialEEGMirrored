@@ -43,10 +43,13 @@ $DB     = Database::singleton();
 
 $res       = array();
 $res       = $DB->pselect("SELECT Name, CenterID FROM psc", array());
+
+/* ### Open iEEG will specify default values for Site, Examiner, Radiologist 
 $site_list = array();
 foreach ($res as $elt) {
     $site_list[$elt["CenterID"]] = $elt["Name"];
 }
+*/ 
 
 // Get reCATPCHA keys
 $reCAPTCHAPrivate = $config->getSetting('reCAPTCHAPrivate');
@@ -63,12 +66,15 @@ $tpl_data['rand']        = rand(0, 9999);
 $tpl_data['success']     = false;
 $tpl_data['study_title'] = $config->getSetting('title');
 $tpl_data['currentyear'] = date('Y');
-$tpl_data['site_list']   = $site_list;
+
+// ### Open iEEG will specify default values for Site, Examiner, Radiologist 
+// $tpl_data['site_list']   = $site_list;
+
 $tpl_data['page']        = 'request_account';
 $tpl_data['currentyear'] = date('Y');
 $tpl_data['version']     = file_get_contents(__DIR__ . "/../../VERSION");
 $tpl_data['form']        = $_REQUEST;
-$tpl_data['page_title']  = 'Request LORIS Account';
+$tpl_data['page_title']  = 'Request access to the MNI Open iEEG Atlas';
 
 try {
     $tpl_data['study_logo'] = "../".$config->getSetting('studylogo');
@@ -106,24 +112,26 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         );
         if (!$resp->isSuccess()) {
             $errors         = $resp->getErrorCodes();
-            $err['captcha'] = 'Please complete the reCaptcha!';
+            $err['captcha'] = 'Please complete the reCaptcha verification.';
         }
     }
 
     if (!checkLen('name')) {
-        $err['name'] = 'The minimum length for First Name field is 3 characters!';
+        $err['name'] = 'The minimum length for First Name field is 3 characters.';
     }
     if (!checkLen('lastname')) {
-        $err['lastname'] = 'The minimum length for Last Name field is 3 characters!';
+        $err['lastname'] = 'The minimum length for Last Name field is 3 characters.';
     }
     if (!checkLen('from')) {
-        $err['from'] = 'Please provide a valid email!';
+        $err['from'] = 'Please enter a valid email.';
     } else if (!filter_var($_REQUEST['from'], FILTER_VALIDATE_EMAIL) ) {
-        $err['from'] = 'Please provide a valid email!';
+        $err['from'] = 'Please enter a valid email.';
     }
+/* ### Open iEEG will specify default values for Site, Examiner, Radiologist 
     if (!checkLen('site', 0)) {
         $err['site'] = 'Please choose a site!';
     }
+*/ 
     if (isset($_SESSION['tntcon'])
         && md5($_REQUEST['verif_box']).'a4xn' != $_SESSION['tntcon']
     ) {
@@ -133,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     $fields = array(
                'name'     => 'First Name',
                'lastname' => 'Last Name',
+               'institution' => 'Institution', 
                'from'     => 'Email',
               );
 
@@ -141,10 +150,10 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     foreach ($fields as $key => $field) {
         $value = $_REQUEST[$key];
         if (preg_match('/["]/', html_entity_decode($value))) {
-            $err[$field] = "You can't use quotes in $field";
+            $err[$field] = "Please avoid use of quotes in $field";
         }
         if (strlen($value) > strlen(strip_tags($value))) {
-            $err[$field] = "You can't use tags in $field";
+            $err[$field] = "Please avoid use of tags in $field";
         }
     }
 
@@ -156,8 +165,9 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $name      = htmlspecialchars($_REQUEST["name"], ENT_QUOTES);
         $lastname  = htmlspecialchars($_REQUEST["lastname"], ENT_QUOTES);
         $from      = htmlspecialchars($_REQUEST["from"], ENT_QUOTES);
+        $institution      = htmlspecialchars($_REQUEST["institution"], ENT_QUOTES);
         $verif_box = htmlspecialchars($_REQUEST["verif_box"], ENT_QUOTES);
-        $site      = htmlspecialchars($_REQUEST["site"], ENT_QUOTES);
+// ###        $site      = htmlspecialchars($_REQUEST["site"], ENT_QUOTES);
 
         // check to see if verification code was correct
         // if verification code was correct send the message and show this page
@@ -167,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                      'Real_name'        => $fullname,
                      'First_name'       => $name,
                      'Last_name'        => $lastname,
+                     'Institution'      => $institution,
                      'Pending_approval' => 'Y',
                      'Email'            => $from,
                     );
@@ -192,17 +203,24 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 'user_psc_rel',
                 array(
                  'UserID'   => $user_id,
-                 'CenterID' => $site,
+                 // 'CenterID' => $site,
+                 'CenterID' => '1',
                 )
             );
         }
 
+
+// ### Open iEEG will specify default values for Site, Examiner, Radiologist 
+ 
+/* ###
         if ($_REQUEST['examiner']=='on') {
             $rad = 0;
             if ($_REQUEST['radiologist']=='on') {
                 $rad =1;
             }
-            //insert in DB as inactive until account approved
+*/
+            $rad = 0;
+            //insert in DB as inactive // ### until account approved
             $examinerID = $DB->pselect(
                 "SELECT e.examinerID
                  FROM examiners e
@@ -231,13 +249,18 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                     'examiners_psc_rel',
                     array(
                      'examinerID'       => $examinerID,
-                     'centerID'         => $site,
-                     'active'           => 'Y',
+                     'centerID'         => '1', // ### $site,
+                     'active'           => 'N',
                      'pending_approval' => 'Y',
                     )
                 );
+
+//print "JUST INSERTED examinerID $examinerID "; 
             }
-        }
+// ###         }
+
+// close Open-iEEG customization for examiner,radiologist 
+
         // Show success message even if email already exists for security reasons
         $tpl_data['success'] = true;
 
