@@ -181,16 +181,29 @@ export class SignalSelectionFilter extends Component {
         <div
           style={{ display: 'inline-block', width: '240px' }}
           className="round-button"
-          onClick={() => this.props.setExpandMode(this.props.expandMode === 0 ? 1 : 0)}
+          onClick={() => {
+            if (this.props.showRegionSelect) {
+              this.props.setShowRegionSelect(false);
+              this.props.setShowMRI(false);
+              return;
+            }
+            this.props.setShowRegionSelect(true);
+          }}
         >
-          {this.props.expandMode === 0 ? 'Show region menu' : 'Full width EEG traces' }
+          {(this.props.showRegionSelect || this.props.showMRI) ? 'Full width EEG traces' : 'Show region menu' }
         </div>
         <div
           style={{ display: 'inline-block', width: '240px' }}
-          className="round-button"
-          onClick={() => this.props.setExpandMode(this.props.expandMode === 2 ? 1 : 2)}
+          className={`round-button ${this.props.showRegionSelect ? '' : 'disabled'}`}
+          onClick={() => {
+            if (this.props.showRegionSelect) {
+              this.props.setShowMRI(!this.props.showMRI)
+              return;
+            }
+            this.props.setShowMRI(false);
+          }}
         >
-          {this.props.expandMode === 2 ? 'Hide' : 'Show'} brain volume visualization
+          {this.props.showMRI ? 'Hide' : 'Show'} brain volume visualization
         </div>
         <hr />
         {toggleFilters}

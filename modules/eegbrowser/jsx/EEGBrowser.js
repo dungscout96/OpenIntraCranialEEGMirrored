@@ -18,7 +18,8 @@ export default class EEGBrowser extends Component {
       selected: [],
       signalSelectFilters: [],
       hoveredRegions: [],
-      expandMode: 1
+      showRegionSelect: true,
+      showMRI: false
     };
   }
   componentDidMount() {
@@ -59,26 +60,27 @@ export default class EEGBrowser extends Component {
         unselectRegions={unselectRegions}
         selectRegions={selectRegions}
         hoveredRegions={this.state.hoveredRegions}
-        showMRI={this.state.expandMode >= 2}
+        showMRI={this.state.showRegionSelect && this.state.showMRI}
       >
       </MRIViewer>
     );
-    const expandBarLeft = this.state.expandMode <= 0 ? null : (
+    const expandBarLeft = this.state.showRegionSelect ? (
       <div
         className="expand-bar"
-        onClick={() => this.setState({ expandMode: Math.max(this.state.expandMode - 1, 0) })}
+        onClick={() => this.setState({ showMRI: false, showRegionSelect: false })}
       >
-        <span className="expand-bar-icon">{'<'}</span>
+        <span style={{ color: '#fff' }}>{'<'}</span>
       </div>
-    );
-    const expandBarRight = this.state.expandMode >= 2 ? null : (
+    ) : null;
+/*
+    const expandBarRight = !this.state.showRegionSelect ? (
       <div
         className="expand-bar"
-        onClick={() => this.setState({ expandMode: Math.min(this.state.expandMode + 1, 2) })}
+        onClick={() => this.setState({ showRegionSelect: true })}
       >
-        <span className="expand-bar-icon">{'>'}</span>
       </div>
-    );
+    ) : null;
+*/
     return (
       <div className="eeg-browser">
         <div className="eeg-browser-row">
@@ -88,17 +90,18 @@ export default class EEGBrowser extends Component {
             onRemoveRegion={region => unselectRegions([region])}
             unselectRegions={unselectRegions}
             setFilters={signalSelectFilters => this.setState({ signalSelectFilters })}
-            expandMode={this.state.expandMode}
-            setExpandMode={expandMode => this.setState({ expandMode })}
+            showMRI={this.state.showMRI}
+            setShowMRI={showMRI => this.setState({ showMRI })}
+            showRegionSelect={this.state.showRegionSelect}
+            setShowRegionSelect={showRegionSelect => this.setState({ showRegionSelect })}
           >
           </SignalSelectionFilter>
         </div>
         <div className="eeg-browser-row">
-          {this.state.expandMode > 0 ? regionSelect : null}
+          {this.state.showRegionSelect ? regionSelect : null}
           {mriView}
           <div className="expand-bars">
             {expandBarLeft}
-            {expandBarRight}
           </div>
           <SignalPlots
             selected={this.state.selected}
