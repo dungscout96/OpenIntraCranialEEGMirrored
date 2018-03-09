@@ -1286,12 +1286,14 @@ class NDB_Form_User_Accounts extends NDB_Form
                 }
             }
         }
+  /* ### Hacked for open iEEG because Coordinators who are not examiners should not have to set examiner status 
         if (!$matched
             && ($values['examiner_radiologist'] !== ''
             || $values['examiner_pending'] !== '')
         ) {
             $errors['examiner_sites'] = "Please select at least one examiner site.";
         }
+*/
         return $errors;
     }
 

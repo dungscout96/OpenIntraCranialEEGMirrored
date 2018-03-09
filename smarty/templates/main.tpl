@@ -137,6 +137,7 @@
                         </li>
                         {/if}
 
+<!-- ### open iEEG
                         <li class="hidden-xs hidden-sm">
                             <a href="#" class="navbar-brand pull-right help-button">
                                 <img width=17 src="{$baseurl}/images/help.gif">
@@ -151,7 +152,7 @@
                                 Site Affiliations: {$userNumSites}
                             </a>
                         </li>
-
+-->
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" style="padding-right:25px;">
                                 {$user.Real_name|escape} <b class="caret"></b>

@@ -13,16 +13,17 @@
   {if $success}
     <div class="success-message">
       <h1>Thank you!</h1>
-      <p>Your request for an account has been received.</p>
-      <p>You will receive your login credential by email once your account has been approved.</p>
+      <p>Your request for access to the MNI Open iEEG Atlas has been received.</p>
+      <p>You will receive a login credential by email once your account has been approved.</p>
       <a href="/" class="btn btn-primary btn-block">
         Return to Login Page
       </a>
     </div>
   {else}
     <p class="text-center">
-      Please fill in the form below to request a LORIS account.<br/>
-      You will be notified by email once your account has been approved.
+      Please complete an account request for research purposes only. 
+      <br>No commercial use without written permission from the authors.
+      <br>You will be notified by email once your account has been approved.
     </p>
     <form action="/request-account/" method="POST"
           name="form1" id="form1">
@@ -40,6 +41,15 @@
           <b class="text-danger">{$error_message['lastname']}</b>
         </span>
       </div>
+
+      <div class="form-group">
+        <input type="text" name="institution" class="form-control" id="institution"
+               placeholder="Institution or Affiliation" value="{$form.institution}" />
+        <span id="helpBlock" class="help-block">
+          <b class="text-danger">{$error_message['institution']}</b>
+        </span>
+      </div>
+
       <div class="form-group">
         <input type="text" name="from" class="form-control" id="from"
                placeholder="Email" value="{$form.from}" />
