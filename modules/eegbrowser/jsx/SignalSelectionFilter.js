@@ -194,10 +194,11 @@ export class SignalSelectionFilter extends Component {
         </div>
         <div
           style={{ display: 'inline-block', width: '240px' }}
-          className={`round-button ${this.props.showRegionSelect ? '' : 'disabled'}`}
+          className="round-button"
           onClick={() => {
-            if (this.props.showRegionSelect) {
-              this.props.setShowMRI(!this.props.showMRI)
+            if (!this.props.showMRI) {
+              this.props.setShowMRI(true);
+              this.props.setShowRegionSelect(true);
               return;
             }
             this.props.setShowMRI(false);
