@@ -178,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                      'First_name'       => $name,
                      'Last_name'        => $lastname,
                      'Institution'      => $institution,
-                     'Pending_approval' => 'N',
+                     'Pending_approval' => 'Y',
                      'Email'            => $from,
                     );
 
@@ -208,20 +208,23 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                 )
             );
             $email = $from;
-            $user  = \User::Singleton($email);
+            $user  = User::Singleton($email);
             $unhashedPassword = $user->newPassword();
             $updateSuccessful = $user->updatePassword($unhashedPassword, null);
             if ($updateSuccessful === false) {
                 error_log("Could not generate password for $email");
             } else {
-                $config = \NDB_Config::singleton();
                 // send the user an email
                 $msgData['study']    = $config->getSetting('title');
                 $msgData['url']      = $config->getSetting('url');
                 $msgData['realname'] = $fullname;
                 $msgData['username'] = $email;
                 $msgData['password'] = $unhashedPassword;
-                \Email::send($email, 'new_user.tpl', $msgData);
+                $DB->update('users',
+                            array('Pending_approval' => 'N'),
+                            array('UserID' => $email)
+                );
+                Email::send($email, 'new_user.tpl', $msgData);
             }
 
         }
