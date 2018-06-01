@@ -178,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                      'First_name'       => $name,
                      'Last_name'        => $lastname,
                      'Institution'      => $institution,
-                     'Pending_approval' => 'N'
+                     'Pending_approval' => 'N',
                      'Email'            => $from,
                     );
 
