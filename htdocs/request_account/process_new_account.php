@@ -28,6 +28,8 @@ require_once "Database.class.inc";
 require_once "Utility.class.inc";
 require_once 'NDB_Config.class.inc';
 require_once 'NDB_Client.class.inc';
+require_once 'User.class.inc';
+require_once 'Email.class.inc';
 //$config =& NDB_Config::singleton();
 $client = new NDB_Client();
 $client->makeCommandLine();
