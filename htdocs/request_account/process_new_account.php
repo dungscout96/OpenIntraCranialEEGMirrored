@@ -28,6 +28,8 @@ require_once "Database.class.inc";
 require_once "Utility.class.inc";
 require_once 'NDB_Config.class.inc';
 require_once 'NDB_Client.class.inc';
+require_once 'User.class.inc';
+require_once 'Email.class.inc';
 //$config =& NDB_Config::singleton();
 $client = new NDB_Client();
 $client->makeCommandLine();
@@ -207,6 +209,26 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                  'CenterID' => '1',
                 )
             );
+            $email = $from;
+            $user  = User::Singleton($email);
+            $unhashedPassword = $user->newPassword();
+            $updateSuccessful = $user->updatePassword($unhashedPassword, null);
+            if ($updateSuccessful === false) {
+                error_log("Could not generate password for $email");
+            } else {
+                // send the user an email
+                $msgData['study']    = $config->getSetting('title');
+                $msgData['url']      = $config->getSetting('url');
+                $msgData['realname'] = $fullname;
+                $msgData['username'] = $email;
+                $msgData['password'] = $unhashedPassword;
+                $DB->update('users',
+                            array('Pending_approval' => 'N'),
+                            array('UserID' => $email)
+                );
+                Email::send($email, 'new_user.tpl', $msgData);
+            }
+
         }
 
 
