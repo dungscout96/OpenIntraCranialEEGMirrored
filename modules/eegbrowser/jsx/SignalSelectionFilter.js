@@ -174,7 +174,7 @@ export class SignalSelectionFilter extends Component {
             href={`${window.loris.BaseURL}/document_repository`}
             target="_blank"
           >
-            Download Region Files
+            Download Files
           </a>
         </div>
         <hr />
